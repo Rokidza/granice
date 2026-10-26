@@ -2,6 +2,8 @@
 
 Analitički alat za planere granične policije: interaktivna karta Staza uz granicu Hrvatske i Bosne i Hercegovine te procjena **Rizika prelaska** po Segmentima granice, izračunata iz otvorenih podataka (OpenStreetMap).
 
+**Stranica:** https://sigurna-granica.netlify.app/
+
 **Status:** pokrivena je cijela granica HR–BiH (oko 1000 km, od Une kod Hrvatske Kostajnice do Konavala). Pilot odsječak (Dvor na Uni – Korenica – Donji Lapac) i dalje se može izračunati zasebno (`--podrucje pilot`). Granice HR–Srbija i HR–Crna Gora nisu uključene.
 
 ## Pokretanje
