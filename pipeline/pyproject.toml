@@ -3,7 +3,7 @@ name = "granice"
 version = "0.1.0"
 description = "Crossing-risk pipeline for the HR-BiH border (see ADR 0001 and 0003)"
 requires-python = ">=3.11"
-dependencies = ["shapely>=2.0", "pyproj>=3.6", "requests>=2.31"]
+dependencies = ["shapely>=2.0", "pyproj>=3.6", "requests>=2.31", "osmium>=4.0", "numpy>=1.26"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.5", "types-requests"]
