@@ -1,0 +1,26 @@
+[project]
+name = "granice"
+version = "0.1.0"
+description = "Crossing-risk pipeline for the HR-BiH border (internal tool, see ADR 0001)"
+requires-python = ">=3.11"
+dependencies = ["shapely>=2.0", "pyproj>=3.6", "requests>=2.31"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.5", "types-requests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["granice"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100

@@ -111,3 +111,18 @@ Web dio ide bez automatskih testova, uz ručnu provjeru u pregledniku.
 | Q21 | Overpass za pilot |
 | Q22 | Ručno osvježavanje, predložena struktura repozitorija |
 | Q23 | Test-first za izračun rizika, dogovoreni redoslijed |
+
+## Odluke pri implementaciji (pilot)
+
+Detalji koje dizajn nije propisivao, a implementacija ih je morala odabrati. Sve su parametri ili se lako mijenjaju.
+
+- **„Jedan stupanj" za rijeku** (Q13) uz kontinuirani indeks (Q10): oduzima se `river_penalty` = 0,25 od indeksa (donja granica 0).
+- **Kritično područje i rijeka:** segment je kritičan kad njegov *indeks* dosegne indeks praga (zadano udaljenost 500 m), a ne sama udaljenost. Tako rijeka može izbaciti segment iz područja. Isto računa web kad planer pomakne prag (`web/js/critical.js` zrcali `risk.py`).
+- **Segment i Staze:** Staza se za segment računa unutar „zone" segmenta (pojas `search_radius_m` = 3000 m oko njega, okomito odrezan na krajevima), pa najbliži par pripada onom dijelu granice gdje se doista nalazi. Staza koja samo dodiruje rub zone ne računa se kao mapirana.
+- **Strana Staze** dolazi iz OSM-a: svaki vrh Staze označen je državom u čijem se području nalazi (Overpass `area`). Staza koja prelazi granicu reže se na dva dijela na presjecištu s graničnom linijom; ako oba dijela pripadaju istom OSM wayu, to je **Izravni prelazak**.
+- **Službeni prijelaz** je OSM `barrier=border_control` unutar 1 km od granice (čvorovi bliži od 100 m smatraju se jednim prijelazom) ili redak u neobaveznoj datoteci `data/sluzbeni_prijelazi.csv` (stupci `naziv,lat,lon`). Segmenti bliže od `sluzbeni_prijelaz_radius_m` (500 m, jer je čvor često mapiran stotinjak metara od same granice) dobivaju stanje `sluzbeni_prijelaz` i nemaju rizik. Prvenstvo stanja: sporna granica, službeni prijelaz, izravni prelazak, nedovoljno podataka.
+- **Sporne zone** su gruba pravokutna područja u `config.py`, nijedno nije u pilotu. Treba ih pregledati prije proširenja na cijelu granicu.
+- **Kategorije Staza:** `track` je makadam/šumski put; `path`, `footway`, `bridleway`, `steps`, `cycleway`, `pedestrian`, `corridor` su staza/puteljak; sve ostalo (osim isključenih) je cesta.
+- **Vodotok:** `waterway=river` (crta) i `natural=water` (površina, uključujući vanjske rubove multipoligona). Rijeka „leži između" kad spojnica najbližeg para siječe vodotok.
+- **Boja u tamnoj temi:** tamni kraj skale nestao bi u podlozi, pa se sidro okreće: u tamnoj temi niski rizik je prigušen, a visoki svijetao i zasićen. Prominentnost uvijek znači rizik. Obje skale prolaze `npm run check-colors`.
+- **Podloga:** MapLibre stranica radi i bez podloge. PMTiles izvadak i fontovi su neobavezni i ne verzioniraju se (README).

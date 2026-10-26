@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Granice – karta rizika prelaska</title>
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="banner" role="note">
+    <strong>Minski sumnjiva područja nisu prikazana.</strong>
+    Staze na karti mogu prolaziti kroz minski sumnjiva područja. Prikaz Staze ne znači da je put siguran.
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar" aria-label="Upravljanje kartom">
+      <header>
+        <h1>Granice</h1>
+        <p class="subtitle">Rizik prelaska granice HR–BiH · pilot odsječak</p>
+        <p class="internal">Isključivo za internu upotrebu.</p>
+      </header>
+
+      <section aria-labelledby="h-layers">
+        <h2 id="h-layers">Slojevi</h2>
+        <ul class="toggles" id="layer-toggles"></ul>
+        <fieldset id="basemap-choice" hidden>
+          <legend>Podloga</legend>
+        </fieldset>
+      </section>
+
+      <section aria-labelledby="h-legend">
+        <h2 id="h-legend">Legenda</h2>
+        <div id="legend"></div>
+      </section>
+
+      <section aria-labelledby="h-areas">
+        <h2 id="h-areas">Kritična područja</h2>
+        <div class="controls">
+          <label for="threshold">Prag: najbliži par Staza do
+            <output id="threshold-value"></output></label>
+          <input id="threshold" type="range" min="100" max="1000" step="50">
+          <label for="top-n">Prikaži prvih</label>
+          <input id="top-n" type="number" min="1" max="100" step="1">
+        </div>
+        <div id="areas-summary" class="muted" aria-live="polite"></div>
+        <div class="table-wrap">
+          <table id="areas">
+            <thead>
+              <tr><th scope="col">#</th><th scope="col">Duljina</th><th scope="col">Najbliže</th><th scope="col">Rizik</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="buttons">
+          <button type="button" id="export-csv">Izvezi CSV</button>
+          <button type="button" id="export-geojson">Izvezi GeoJSON</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="h-notes" class="notes">
+        <h2 id="h-notes">Napomene</h2>
+        <ul>
+          <li>Rizik se računa samo iz infrastrukture (Staze), bez podataka o osobama, incidentima ili patrolama.</li>
+          <li>OSM je u BiH slabije mapiran: „Nedovoljno podataka” nije isto što i nizak rizik.</li>
+        </ul>
+        <p id="osm-date" class="muted"></p>
+        <p class="muted">© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
+      </section>
+    </aside>
+
+    <main>
+      <div id="map" role="application" aria-label="Karta Staza i rizika prelaska"></div>
+      <p id="error" class="error" role="alert" hidden></p>
+    </main>
+  </div>
+
+  <footer class="notice-bar" role="note">
+    Granična linija je informativna (izvor: OpenStreetMap) i nije pravno obvezujuća.
+    Procjena je indikativna i nije validirana terenskim podacima.
+  </footer>
+
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="vendor/pmtiles.js"></script>
+  <script src="vendor/basemaps.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

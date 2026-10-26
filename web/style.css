@@ -1,0 +1,146 @@
+:root {
+  color-scheme: light dark;
+  --surface: #fcfcfb;
+  --page: #f9f9f7;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6b6a66;
+  --line: #e1e0d9;
+  --accent: #184f95;
+  --banner-bg: #fff4d6;
+  --banner-ink: #3b2a00;
+  --banner-line: #b27b00;
+  --hatch: #8a8a85;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1a1a19;
+    --page: #0d0d0d;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #a5a49b;
+    --line: #2c2c2a;
+    --accent: #86b6ef;
+    --banner-bg: #3a2c05;
+    --banner-ink: #ffe9b0;
+    --banner-line: #d9a21c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.banner {
+  background: var(--banner-bg);
+  color: var(--banner-ink);
+  border-bottom: 3px solid var(--banner-line);
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.notice-bar { flex: none; padding: 6px 16px; background: var(--surface); border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12px; }
+
+.layout { flex: 1; display: flex; min-height: 0; }
+
+.sidebar {
+  width: 380px;
+  flex: none;
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+main { flex: 1; position: relative; min-width: 0; }
+#map { position: absolute; inset: 0; }
+
+h1 { margin: 0; font-size: 22px; }
+h2 { margin: 20px 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+.subtitle { margin: 2px 0 0; color: var(--ink-2); }
+.internal { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.muted { color: var(--muted); font-size: 12px; margin: 6px 0; }
+a { color: var(--accent); }
+
+.toggles { list-style: none; margin: 0; padding: 0; }
+.toggles li { margin: 2px 0; }
+.toggles label, #basemap-choice label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+fieldset { border: 0; margin: 10px 0 0; padding: 0; }
+legend { padding: 0; color: var(--ink-2); font-size: 12px; }
+
+.swatch { display: inline-block; width: 22px; height: 0; border-top: 3px solid; flex: none; }
+.swatch.thin { border-top-width: 2px; }
+.swatch.dashed { border-top-style: dashed; }
+
+/* Legend */
+.legend-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.legend-row .label { flex: 1; }
+.ramp { position: relative; height: 14px; border: 1px solid var(--ink-2); border-radius: 2px; margin: 8px 6px 24px; }
+.ramp .tick { position: absolute; top: 14px; transform: translateX(-50%); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.ramp .tick::before { content: ""; position: absolute; left: 50%; top: -14px; height: 14px; border-left: 1px solid var(--ink); }
+.ramp-caption { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 0 6px 10px; }
+.hatch-swatch {
+  width: 22px; height: 14px; flex: none; border: 1px solid var(--hatch);
+  background: repeating-linear-gradient(45deg, #4a4945 0 2px, #bdbcb4 2px 5px);
+}
+.legend-icon { width: 22px; height: 22px; flex: none; }
+
+/* Kritična područja */
+.controls { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; }
+.controls label { grid-column: 1 / -1; }
+.controls #threshold { grid-column: 1 / -1; width: 100%; }
+.controls #top-n { grid-column: 1 / -1; width: 80px; }
+.controls label[for="top-n"] { grid-column: 1 / -1; }
+input[type="number"] { background: var(--surface); color: var(--ink); border: 1px solid var(--ink-2); border-radius: 4px; padding: 3px 6px; }
+
+.table-wrap { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+th { position: sticky; top: 0; background: var(--surface); font-weight: 600; color: var(--ink-2); font-size: 12px; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr:focus-visible, tbody tr.selected { background: var(--line); outline: none; }
+tbody tr:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+tbody tr.selected td:first-child { font-weight: 700; }
+.risk-chip { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--ink-2); border-radius: 2px; }
+
+.buttons { display: flex; gap: 8px; margin-top: 10px; }
+button {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--ink-2);
+  border-radius: 4px; padding: 6px 10px; font: inherit; cursor: pointer;
+}
+button:hover { background: var(--line); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.notes ul { margin: 0; padding-left: 18px; }
+.notes li { margin: 4px 0; }
+
+.error { position: absolute; top: 16px; left: 16px; right: 16px; margin: 0; padding: 12px 16px; background: var(--surface); color: var(--ink); border: 2px solid var(--banner-line); border-radius: 6px; z-index: 5; }
+
+/* Popup */
+.maplibregl-popup-content { background: var(--surface); color: var(--ink); font: 13px/1.45 system-ui, sans-serif; padding: 12px 14px; min-width: 240px; max-width: 320px; }
+.maplibregl-popup-tip { border-top-color: var(--surface) !important; border-bottom-color: var(--surface) !important; }
+.maplibregl-popup-close-button { color: var(--ink); }
+.popup h3 { margin: 0 0 6px; font-size: 14px; }
+.popup dl { margin: 6px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.popup dt { color: var(--ink-2); }
+.popup dd { margin: 0; }
+.popup .flag { display: inline-block; margin: 6px 6px 0 0; padding: 1px 8px; border: 1px solid var(--ink-2); border-radius: 10px; font-size: 12px; }
+
+
+/* Map controls follow the theme */
+.maplibregl-ctrl-attrib, .maplibregl-ctrl-scale {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+.maplibregl-ctrl-attrib a { color: var(--ink); }
