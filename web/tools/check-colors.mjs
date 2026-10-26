@@ -1,12 +1,13 @@
-// Validates the colour scales for both themes: lightness order and steps, single hue, contrast
-// against the surface, and separation under colour-vision-deficiency simulation.
+// Validates the map colours for both themes: the risk scale (lightness order and steps, contrast
+// against the surface or casing, separation under colour-vision-deficiency simulation), the road
+// categories and the Kritična područja red.
 // Method after the dataviz checks: OKLab distance x100, Machado et al. 2009 at severity 1.0.
 // Usage: npm run check-colors   (exit code 1 on any failure)
 
 import {
   CASING,
-  HUE,
-  STAZA_COLORS,
+  DANGER,
+  ROAD_STYLES,
   SURFACES,
   hexToLinear,
   linearToHex,
@@ -22,7 +23,6 @@ const CVD = {
 
 const SAMPLES = 6; // discrete steps compared by eye; the scale itself is continuous
 const MIN_STEP_DL = 0.06; // adjacent lightness step
-const MIN_SURFACE_CONTRAST = 2.0; // faintest end vs surface (it is meant to recede, not vanish)
 const MIN_CVD_DELTA_E = 6;
 
 const simulate = (hex, matrix) =>
@@ -37,10 +37,6 @@ const contrast = (a, b) => {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 };
-const hueOf = (hex) => {
-  const [, a, b] = lab(hex);
-  return ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
-};
 
 let failures = 0;
 const report = (ok, name, detail) => {
@@ -48,61 +44,44 @@ const report = (ok, name, detail) => {
   if (!ok) failures += 1;
 };
 
-for (const theme of ["light", "dark"]) {
-  const surface = SURFACES[theme];
-  const stops = Array.from({ length: SAMPLES }, (_, i) => riskColor(i / (SAMPLES - 1), theme));
-  console.log(`\nRisk scale, ${theme} theme, surface ${surface}: ${stops.join(" ")}`);
-
-  const lightness = stops.map((hex) => lab(hex)[0]);
-  const direction = theme === "light" ? -1 : 1; // prominence rises with risk
-  const steps = lightness.slice(1).map((l, i) => (l - lightness[i]) * direction);
-  report(
-    Math.min(...steps) >= MIN_STEP_DL,
-    "lightness steps",
-    `smallest step ${Math.min(...steps).toFixed(3)} (need >= ${MIN_STEP_DL}, monotone)`,
-  );
-
-  const hues = stops.map(hueOf);
-  const spread = Math.max(...hues) - Math.min(...hues);
-  report(spread <= 12, "single hue", `hue spread ${spread.toFixed(1)} degrees around ${HUE}`);
-
-  const faint = stops[0];
-  report(
-    contrast(faint, surface) >= MIN_SURFACE_CONTRAST,
-    "faintest end vs surface",
-    `${contrast(faint, surface).toFixed(2)}:1 (need >= ${MIN_SURFACE_CONTRAST})`,
-  );
-  report(
-    contrast(faint, CASING[theme]) >= 3 || contrast(faint, surface) >= 3,
-    "faintest end vs casing",
-    `${contrast(faint, CASING[theme]).toFixed(2)}:1 (need >= 3 against casing or surface)`,
-  );
-  const strong = stops[SAMPLES - 1];
-  report(
-    Math.max(contrast(strong, surface), contrast(strong, CASING[theme])) >= 3,
-    "strongest end vs surface or casing",
-    `${contrast(strong, surface).toFixed(2)}:1 / ${contrast(strong, CASING[theme]).toFixed(2)}:1 (need >= 3)`,
-  );
-
-  for (const [name, matrix] of Object.entries(CVD)) {
-    const simulated = stops.map((hex) => simulate(hex, matrix));
-    const worst = Math.min(...simulated.slice(1).map((hex, i) => deltaE(hex, simulated[i])));
-    report(worst >= MIN_CVD_DELTA_E, `adjacent steps under ${name}`, `worst delta E ${worst.toFixed(1)} (need >= ${MIN_CVD_DELTA_E})`);
-  }
+// The scale is the same in both themes; what differs is the surface and casing it sits on.
+const stops = Array.from({ length: SAMPLES }, (_, i) => riskColor(i / (SAMPLES - 1)));
+console.log(`
+Risk scale: ${stops.join(" ")}`);
+const lightness = stops.map((hex) => lab(hex)[0]);
+const steps = lightness.slice(1).map((l, i) => lightness[i] - l); // darker = higher risk
+report(
+  Math.min(...steps) >= MIN_STEP_DL,
+  "lightness steps",
+  `smallest step ${Math.min(...steps).toFixed(3)} (need >= ${MIN_STEP_DL}, monotone)`,
+);
+for (const [name, matrix] of Object.entries(CVD)) {
+  const simulated = stops.map((hex) => simulate(hex, matrix));
+  const worst = Math.min(...simulated.slice(1).map((hex, i) => deltaE(hex, simulated[i])));
+  report(worst >= MIN_CVD_DELTA_E, `adjacent steps under ${name}`, `worst delta E ${worst.toFixed(1)} (need >= ${MIN_CVD_DELTA_E})`);
 }
 
-// The two Strane must stay apart from each other under every vision type and against the surface.
 for (const theme of ["light", "dark"]) {
-  const { HR, BiH } = STAZA_COLORS[theme];
-  console.log(`\nStaza colours, ${theme} theme: HR ${HR}, BiH ${BiH}`);
-  report(deltaE(HR, BiH) >= 15, "HR vs BiH (normal vision)", deltaE(HR, BiH).toFixed(1));
-  for (const [name, matrix] of Object.entries(CVD)) {
-    const d = deltaE(simulate(HR, matrix), simulate(BiH, matrix));
-    report(d >= 8, `HR vs BiH under ${name}`, d.toFixed(1));
+  const surface = SURFACES[theme];
+  console.log(`
+${theme} theme, surface ${surface}, casing ${CASING[theme]}`);
+  const faint = stops[0];
+  const strong = stops[SAMPLES - 1];
+  const seen = (hex) => Math.max(contrast(hex, surface), contrast(hex, CASING[theme]));
+  report(seen(faint) >= 3, "faintest risk end vs surface or casing", `${seen(faint).toFixed(2)}:1 (need >= 3)`);
+  report(seen(strong) >= 3, "strongest risk end vs surface or casing", `${seen(strong).toFixed(2)}:1 (need >= 3)`);
+
+  const roads = ROAD_STYLES[theme];
+  for (const [category, { fill, casing }] of Object.entries(roads)) {
+    const visible = Math.max(contrast(fill, surface), contrast(fill, casing));
+    report(visible >= 3, `${category} vs surface or its casing`, `${visible.toFixed(2)}:1 (need >= 3)`);
   }
-  for (const [side, hex] of Object.entries(STAZA_COLORS[theme])) {
-    report(contrast(hex, SURFACES[theme]) >= 3, `${side} vs surface`, `${contrast(hex, SURFACES[theme]).toFixed(2)}:1`);
-  }
+  report(
+    deltaE(roads.cesta.fill, roads.makadam.fill) >= 15 && deltaE(roads.makadam.fill, roads.staza.fill) >= 8,
+    "road categories apart",
+    `cesta/makadam ${deltaE(roads.cesta.fill, roads.makadam.fill).toFixed(1)}, makadam/staza ${deltaE(roads.makadam.fill, roads.staza.fill).toFixed(1)}`,
+  );
+  report(contrast(DANGER[theme], surface) >= 3, "Kritično područje red vs surface", `${contrast(DANGER[theme], surface).toFixed(2)}:1`);
 }
 
 console.log(failures === 0 ? "\nAll colour checks pass." : `\n${failures} colour check(s) FAILED.`);

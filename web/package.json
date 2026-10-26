@@ -4,6 +4,7 @@
   "description": "Static map page for the HR-BiH crossing-risk tool (internal, see ADR 0001)",
   "scripts": {
     "vendor": "node tools/vendor.mjs",
+    "build": "node tools/build-dist.mjs",
     "check-colors": "node tools/check-colors.mjs"
   },
   "dependencies": {

@@ -59,6 +59,17 @@ export function areaBounds(area) {
   ];
 }
 
+const METRES_PER_DEGREE = 111320;
+
+/** Circle around an area, for marking it on the map: centre in degrees, radius in metres. */
+export function areaCircle(area) {
+  const [[west, south], [east, north]] = areaBounds(area);
+  const lat = (south + north) / 2;
+  const dx = ((east - west) / 2) * METRES_PER_DEGREE * Math.cos((lat * Math.PI) / 180);
+  const dy = ((north - south) / 2) * METRES_PER_DEGREE;
+  return { lon: (west + east) / 2, lat, radiusM: Math.max(350, Math.hypot(dx, dy) * 1.15 + 150) };
+}
+
 const round = (value, digits) => Number(value.toFixed(digits));
 
 export function areasToGeoJson(areas) {

@@ -35,7 +35,7 @@ Detalji o izvorima i licencama: [`podaci-i-licence.md`](podaci-i-licence.md).
 
 ## Prikaz
 
-- MapLibre GL nad samostalno hostanim Protomaps PMTiles izvatkom za koridor HR–BiH. Ne koristi se `tile.openstreetmap.org` (politika ga zabranjuje za ovakvu upotrebu). Satelitska podloga (DGU ortofoto WMS) neobavezna je opcija ako licenca bude jasna.
+- MapLibre GL nad samostalno hostanim Protomaps PMTiles izvatkom za koridor HR–BiH. Ne koristi se `tile.openstreetmap.org` (politika ga zabranjuje za ovakvu upotrebu). Satelitska podloga (DGU ortofoto WMS) neobavezna je opcija ako licenca bude jasna. **Izmijenjeno ADR-om 0002:** podloge Karta (OpenFreeMap), Reljef (OpenTopoMap) i Satelit (Esri) dohvaćaju se online; lokalni izvadak ostaje neobavezan.
 - Slojevi koji se uključuju i isključuju: Staze HR, Staze BiH (različite boje, po kategorijama), granica, rizik po segmentima, službeni prijelazi.
 - Klik na segment prikazuje: indeks rizika, najbližu udaljenost, uključene Staze i oznake (rijeka, izravni prelazak).
 - Bočna lista Top N Kritičnih područja, klik zumira kartu.

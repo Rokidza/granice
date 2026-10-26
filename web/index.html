@@ -10,68 +10,63 @@
 </head>
 <body>
   <div class="banner" role="note">
-    <strong>Minski sumnjiva područja nisu prikazana.</strong>
-    Staze na karti mogu prolaziti kroz minski sumnjiva područja. Prikaz Staze ne znači da je put siguran.
+    <span class="banner-icon" aria-hidden="true">⚠</span>
+    <span><strong>Minski sumnjiva područja nisu prikazana.</strong>
+    Staze na karti mogu prolaziti kroz minski sumnjiva područja. Prikaz Staze ne znači da je put siguran.</span>
   </div>
 
   <div class="layout">
     <aside class="sidebar" aria-label="Upravljanje kartom">
-      <header>
+      <header class="brand">
         <h1>Granice</h1>
-        <p class="subtitle">Rizik prelaska granice HR–BiH · pilot odsječak</p>
-        <p class="internal">Isključivo za internu upotrebu.</p>
+        <p>Rizik prelaska granice HR–BiH</p>
+        <p class="tags"><span class="tag">pilot odsječak</span><span class="tag">isključivo interno</span></p>
       </header>
 
-      <section aria-labelledby="h-layers">
-        <h2 id="h-layers">Slojevi</h2>
-        <ul class="toggles" id="layer-toggles"></ul>
-        <fieldset id="basemap-choice" hidden>
-          <legend>Podloga</legend>
-        </fieldset>
-      </section>
-
-      <section aria-labelledby="h-legend">
-        <h2 id="h-legend">Legenda</h2>
-        <div id="legend"></div>
-      </section>
-
-      <section aria-labelledby="h-areas">
+      <section class="panel" aria-labelledby="h-areas">
         <h2 id="h-areas">Kritična područja</h2>
+        <p id="areas-summary" class="summary" aria-live="polite"></p>
         <div class="controls">
-          <label for="threshold">Prag: najbliži par Staza do
-            <output id="threshold-value"></output></label>
+          <label for="threshold">Prag: najbliži par Staza do <output id="threshold-value"></output></label>
           <input id="threshold" type="range" min="100" max="1000" step="50">
-          <label for="top-n">Prikaži prvih</label>
-          <input id="top-n" type="number" min="1" max="100" step="1">
+          <label class="inline" for="top-n">Prikaži prvih
+            <input id="top-n" type="number" min="1" max="100" step="1">
+          </label>
         </div>
-        <div id="areas-summary" class="muted" aria-live="polite"></div>
-        <div class="table-wrap">
-          <table id="areas">
-            <thead>
-              <tr><th scope="col">#</th><th scope="col">Duljina</th><th scope="col">Najbliže</th><th scope="col">Rizik</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <ol id="areas" class="areas"></ol>
         <div class="buttons">
           <button type="button" id="export-csv">Izvezi CSV</button>
           <button type="button" id="export-geojson">Izvezi GeoJSON</button>
         </div>
       </section>
 
-      <section aria-labelledby="h-notes" class="notes">
-        <h2 id="h-notes">Napomene</h2>
+      <details class="panel" open>
+        <summary><h2>Legenda</h2></summary>
+        <div id="legend"></div>
+      </details>
+
+      <details class="panel">
+        <summary><h2>Slojevi</h2></summary>
+        <ul class="toggles" id="layer-toggles"></ul>
+      </details>
+
+      <footer class="notes">
         <ul>
           <li>Rizik se računa samo iz infrastrukture (Staze), bez podataka o osobama, incidentima ili patrolama.</li>
           <li>OSM je u BiH slabije mapiran: „Nedovoljno podataka” nije isto što i nizak rizik.</li>
+          <li>Podloge osim lokalne dohvaćaju se s vanjskih poslužitelja (OpenFreeMap, OpenTopoMap, Esri), koji vide koji se dio granice pregledava.</li>
         </ul>
-        <p id="osm-date" class="muted"></p>
-        <p class="muted">© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
-      </section>
+        <p id="osm-date"></p>
+        <p>© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
+      </footer>
     </aside>
 
     <main>
       <div id="map" role="application" aria-label="Karta Staza i rizika prelaska"></div>
+      <div class="map-tools">
+        <div id="basemap-choice" class="segmented" role="radiogroup" aria-label="Podloga karte"></div>
+        <p id="basemap-status" class="map-status" role="status"></p>
+      </div>
       <p id="error" class="error" role="alert" hidden></p>
     </main>
   </div>
