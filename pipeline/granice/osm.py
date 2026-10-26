@@ -59,7 +59,7 @@ class OverpassSource:
     """Fetches the Pilot odsječak from the public Overpass API, caching each raw response."""
 
     URL = "https://overpass-api.de/api/interpreter"
-    USER_AGENT = "granice-pilot/0.1 (internal analysis tool)"
+    USER_AGENT = "granice-pilot/0.1 (analysis tool)"
 
     def __init__(self, bbox: BBox, cache_dir: Path, refresh: bool = False) -> None:
         self._bbox = bbox

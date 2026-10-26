@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by 0003 (javna objava); ostalo vrijedi
 ---
 
 # Interni alat, procjena rizika samo iz otvorenih OSM podataka

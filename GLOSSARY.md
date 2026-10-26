@@ -1,6 +1,6 @@
 # Granice
 
-Interni analitički alat za planere granične policije: na karti prikazuje prohodne putove uz granicu Hrvatske i Bosne i Hercegovine te procjenjuje na kojim je mjestima prelazak najlakši, kako bi se resursi rasporedili po granici.
+Analitički alat za planere granične policije: na karti prikazuje prohodne putove uz granicu Hrvatske i Bosne i Hercegovine te procjenjuje na kojim je mjestima prelazak najlakši, kako bi se resursi rasporedili po granici.
 
 ## Language
 

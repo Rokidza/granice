@@ -814,6 +814,12 @@ async function start() {
   const params = data.meta.parametri;
   $("threshold").value = String(params.critical_distance_m);
   $("top-n").value = String(CONFIG.topN);
+  for (const [name, file] of [["segmenti", "segmenti.geojson"], ["staze", "staze.geojson"], ["granica", "granica.geojson"], ["prijelazi", "prijelazi.geojson"]]) {
+    const link = element("a", name);
+    link.href = CONFIG.dataDir + file;
+    link.download = file;
+    $("data-links").append(link, " ");
+  }
   $("osm-date").textContent = `OSM podaci od: ${new Date(data.meta.osm_podaci_od).toLocaleString("hr-HR", { dateStyle: "long", timeStyle: "short" })}`;
 
   state.hasLocalBasemap = await exists(absolute(CONFIG.basemap));

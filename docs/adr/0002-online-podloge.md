@@ -8,7 +8,7 @@ Karta nudi četiri podloge: Karta (OpenFreeMap), Reljef (OpenTopoMap), Satelitsk
 
 ## Consequences
 
-- Operatori tih servisa vide koje se pločice, dakle koji dio granice, gledaju. To je u suprotnosti s duhom ADR-a 0001 (agregirana slika slabih točaka je osjetljiva). Izračunati slojevi (Staze, Segmenti, rizik) i dalje se poslužuju samo lokalno i nikad ne idu vanjskim servisima.
+- Operatori tih servisa vide koje se pločice, dakle koji dio granice, gledaju. Kod internog korištenja (ADR 0001) to je bio problem privatnosti, a kod javne objave (ADR 0003) više nije. Izračunati slojevi (Staze, Segmenti, rizik) i dalje se poslužuju samo lokalno i nikad ne idu vanjskim servisima.
 - Ako `data/basemap.pmtiles` postoji, nudi se "Karta (lokalno, bez interneta)" i zadana je podloga. Reljef i satelit nemaju lokalnu zamjenu dok se ne nabavi licenciran izvor (npr. DGU ortofoto).
 - Uvjeti korištenja OpenTopoMap i Esri servisa nisu pravno provjereni (vidi `docs/podaci-i-licence.md`), a oba su "best effort" bez SLA-a. Prije šire upotrebe provjeriti ili zamijeniti vlastitim izvorom.
 - Podloge se definiraju u `web/config.js` i lako se mijenjaju ili uklanjaju (npr. uklanjanjem unosa `reljef` i `satelit` za potpuno lokalni rad).

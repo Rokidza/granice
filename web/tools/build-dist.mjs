@@ -1,6 +1,7 @@
 // Assembles the folder that is deployed to Netlify (web/dist/): the static page, the vendored
 // libraries and the layers computed by the pipeline, side by side. The layers are not in git
 // (data/ is ignored), so this runs on a machine that has them. Usage: npm run build
+// The folder is self-contained: drag it onto https://app.netlify.com/drop.
 //
 // Needs `python -m granice refresh|compute` (data/out/) and `npm run vendor` (web/vendor/) first.
 
@@ -41,4 +42,19 @@ const deployed = config.replaceAll("../data/out/", "data/").replaceAll("../data/
 if (deployed.includes("../")) throw new Error("config.js still points outside dist/");
 writeFileSync(join(out, "config.js"), deployed);
 
-console.log(`web/dist ready (${DATA_FILES.length} data files). Deploy: netlify deploy --prod --dir=web/dist`);
+// Netlify applies this file to a drag-and-drop deploy as well as to a CLI one (netlify.toml only to the latter).
+writeFileSync(
+  join(out, "_headers"),
+  [
+    "/*",
+    "  X-Robots-Tag: noindex, nofollow",
+    "  Referrer-Policy: no-referrer",
+    "  X-Content-Type-Options: nosniff",
+    "  X-Frame-Options: DENY",
+    "/data/*",
+    "  Cache-Control: no-store",
+    "",
+  ].join("\n"),
+);
+
+console.log(`web/dist ready (${DATA_FILES.length} data files). Drop the folder on https://app.netlify.com/drop`);

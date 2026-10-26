@@ -129,7 +129,7 @@ class _RangeHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def _serve(port: int) -> None:
-    """Serve the repository root on localhost only (ADR 0001: never a public URL)."""
+    """Serve the repository root on localhost only (a dev server; the public site is a Netlify deploy, ADR 0003)."""
     handler = functools.partial(_RangeHandler, directory=str(REPO_ROOT))
     with http.server.ThreadingHTTPServer(("127.0.0.1", port), handler) as server:
         print(f"Granice: http://127.0.0.1:{port}/web/  (Ctrl+C to quit)")

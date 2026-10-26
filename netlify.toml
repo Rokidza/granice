@@ -1,7 +1,7 @@
-# Deploy from a machine that has the computed data (data/ is not in git):
-#   cd web && npm run vendor && npm run build
+# Normally the folder is dragged onto https://app.netlify.com/drop (README.md, "Objava na Netlifyju").
+# This file is for the CLI route: cd web && npm run vendor && npm run build, then
 #   netlify deploy --prod --dir=web/dist
-# See README.md, "Deploy na Netlify". The site is behind a login (netlify/edge-functions/auth.js).
+# The same headers are also written to web/dist/_headers by the build, which is what drag and drop uses.
 
 [build]
   publish = "web/dist"

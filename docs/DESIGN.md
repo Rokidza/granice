@@ -1,12 +1,12 @@
 # Dizajn: Granice
 
-Dogovoreno kroz "grilling" sesiju 2026-10-26. Termini su definirani u [`../GLOSSARY.md`](../GLOSSARY.md), a ključna odluka o opsegu i podacima u [`adr/0001-interni-alat-samo-osm-podaci.md`](adr/0001-interni-alat-samo-osm-podaci.md).
+Dogovoreno kroz "grilling" sesiju 2026-10-26. Termini su definirani u [`../GLOSSARY.md`](../GLOSSARY.md), a ključna odluka o opsegu i podacima u [`adr/0001-interni-alat-samo-osm-podaci.md`](adr/0001-interni-alat-samo-osm-podaci.md). Objava na javnom URL-u: [`adr/0003-javna-objava.md`](adr/0003-javna-objava.md).
 
 ## Svrha i opseg
 
-- Interni alat za planere granične policije: prikazuje Staze uz granicu HR–BiH i procjenjuje gdje je prelazak najlakši, radi boljeg raspoređivanja resursa.
+- Alat za planere granične policije: prikazuje Staze uz granicu HR–BiH i procjenjuje gdje je prelazak najlakši, radi boljeg raspoređivanja resursa.
 - Korisnici su planeri i analitičari u uredu. Desktop preglednik. Terenska/mobilna verzija nije u opsegu.
-- Aplikacija je isključivo interna (lokalno ili privatni hosting), bez javnog URL-a.
+- Aplikacija je bila zamišljena kao isključivo interna (ADR 0001), a objavljuje se javno (ADR 0003).
 - Procjena se računa samo iz infrastrukture. Ne koristi podatke o osobama, incidentima ni patrolama.
 - Sučelje je na hrvatskom, kod i komentari na engleskom, glosar na hrvatskom.
 
@@ -93,7 +93,7 @@ Web dio ide bez automatskih testova, uz ručnu provjeru u pregledniku.
 | Q2 | Rizik iz udaljenosti HR–BiH Staza, bez podataka o osobama |
 | Q3 | V1 samo otvoreni podaci |
 | Q4/Q8 | Pilot na dijelu granice koji uključuje Bihaćki džep i Plješivicu |
-| Q5 | Interna aplikacija, nikad javni URL |
+| Q5 | Interna aplikacija, nikad javni URL (promijenjeno ADR-om 0003: javna objava) |
 | Q6 | Statična stranica plus Python pipeline |
 | Q7 | Sučelje hrvatski, kod engleski |
 | Q9 | Segment 500 m |
