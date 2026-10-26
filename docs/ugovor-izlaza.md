@@ -8,10 +8,11 @@ Promjena oblika podataka podiže `schema` u `meta.json`.
 
 | ključ | značenje |
 |---|---|
-| `schema` | verzija ugovora (trenutno 1) |
+| `schema` | verzija ugovora (trenutno 2) |
 | `osm_podaci_od` | vrijeme OSM podataka (ISO 8601), prikazuje se kao „OSM podaci od: …" |
 | `generirano` | vrijeme izračuna |
-| `pilot_bbox` | `south, west, north, east` Pilot odsječka |
+| `podrucje` | `cijela` (cijela granica HR–BiH) \| `pilot` (samo Pilot odsječak) |
+| `podrucje_bbox` | `south, west, north, east` izračunatog područja |
 | `parametri` | svi parametri izračuna (vidi tablicu ispod); web iz njih računa indeks i Kritična područja |
 | `sporne_zone` | nazivi područja označenih kao sporna granica |
 | `broj_segmenata_po_stanju` | brojač po `stanje` |
@@ -39,7 +40,7 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 
 ## `granica.geojson`
 
-`LineString` lanci granične linije unutar Pilot odsječka. Svojstvo `lanac` (redni broj). Informativno, nije pravno obvezujuće.
+`LineString` lanci granične linije unutar izračunatog područja (za cijelu granicu to je obično jedan lanac). Svojstvo `lanac` (redni broj). Informativno, nije pravno obvezujuće.
 
 ## `segmenti.geojson`
 

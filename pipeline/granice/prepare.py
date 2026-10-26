@@ -1,7 +1,7 @@
 """Turns raw OSM data into the geometries the risk calculation needs.
 
 Staza preparation: assigns every Staza a category and splits it into pieces per Strana.
-Border: merges the border ways into chains and clips them to the Pilot odsječak.
+Border: merges the border ways into chains and clips them to the area being assessed.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class Prepared:
 
 def prepare(
     data: OsmData,
-    pilot: BBox,
+    area: BBox,
     disputed: list[DisputedSection],
     manual_crossings: list[tuple[float, float]] | None = None,
 ) -> Prepared:
@@ -52,17 +52,17 @@ def prepare(
     to_wgs84 = Transformer.from_crs(PROJECTED_CRS, "EPSG:4326", always_xy=True)
 
     border_all = _merge([_line(c, to_m) for c in data.border])
-    chains = _clip_chains(border_all, _bbox_polygon(pilot, to_m))
+    chains = _clip_chains(border_all, _bbox_polygon(area, to_m))
 
     staze: list[Staza] = []
-    near_pilot = shapely.union_all(chains).buffer(CORRIDOR_M) if chains else Polygon()
+    near_border = shapely.union_all(chains).buffer(CORRIDOR_M) if chains else Polygon()
     for way in data.paths:
         staze += [
             piece
             for piece in _split_by_strana(way, to_m, border_all)
             if piece.geometry.intersects(
-                near_pilot
-            )  # the fetch also covers border outside the pilot
+                near_border
+            )  # the fetch also covers border outside the area
         ]
 
     water: list[BaseGeometry] = [_line(c, to_m) for c in data.water_lines]
@@ -121,9 +121,9 @@ def _lines_of(geometry: BaseGeometry) -> list[LineString]:
     return [g for part in getattr(geometry, "geoms", []) for g in _lines_of(part)]
 
 
-def _clip_chains(border: BaseGeometry, pilot: Polygon) -> list[LineString]:
-    """Border chains inside the Pilot odsječak, in a stable order (north to south, west to east)."""
-    clipped = _merge(_lines_of(border.intersection(pilot)))
+def _clip_chains(border: BaseGeometry, area: Polygon) -> list[LineString]:
+    """Border chains inside the area, in a stable order (north to south, west to east)."""
+    clipped = _merge(_lines_of(border.intersection(area)))
     chains = _lines_of(clipped)
     return sorted(chains, key=lambda c: (-c.coords[0][1], c.coords[0][0]))
 

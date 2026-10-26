@@ -2,18 +2,18 @@
 
 Analitički alat za planere granične policije: interaktivna karta Staza uz granicu Hrvatske i Bosne i Hercegovine te procjena **Rizika prelaska** po Segmentima granice, izračunata iz otvorenih podataka (OpenStreetMap).
 
-**Status:** pilot odsječak (Dvor na Uni – Korenica – Donji Lapac) je implementiran. Cijela granica je buduća faza.
+**Status:** pokrivena je cijela granica HR–BiH (oko 1000 km, od Une kod Hrvatske Kostajnice do Konavala). Pilot odsječak (Dvor na Uni – Korenica – Donji Lapac) i dalje se može izračunati zasebno (`--podrucje pilot`). Granice HR–Srbija i HR–Crna Gora nisu uključene.
 
 ## Pokretanje
 
-Potrebni su Python 3.11, Node i internet (pri prvom dohvatu podataka i za podloge karte).
+Potrebni su Python 3.11, Node i internet (pri prvom dohvatu podataka i za podloge karte). Pri prvom izračunu preuzima se oko 360 MB.
 
 ```sh
 # 1. izračun (jednom, i kad se podaci žele osvježiti)
 cd pipeline
 pip install -e ".[dev]"
-python -m granice refresh          # ponovni dohvat OSM-a s Overpassa i izračun
-python -m granice compute          # samo izračun iz već dohvaćenih podataka (data/raw/)
+python -m granice refresh          # ponovno preuzimanje Geofabrik izvadaka (oko 360 MB) i izračun
+python -m granice compute          # samo izračun iz već preuzetih podataka (data/raw/)
 
 # 2. web
 cd ../web
@@ -25,7 +25,7 @@ cd ..
 python -m granice serve            # http://127.0.0.1:8000/web/
 ```
 
-Parametri izračuna mijenjaju se opcijama, npr. `python -m granice compute --segment-length-m 250 --near-distance-m 80`. Zadane vrijednosti i značenja: [`docs/ugovor-izlaza.md`](docs/ugovor-izlaza.md).
+Zadani izvor su Geofabrik izvaci Hrvatske i BiH (`data/raw/geofabrik/`, čita ih `pyosmium`): cijela granica se izračuna za nekoliko minuta i ne ovisi o javnom poslužitelju. `--izvor overpass` dohvaća isto s Overpass API-ja u pločicama od pola stupnja (sporo, sat vremena i više, jer javni poslužitelji često vraćaju 502; odgovori se spremaju u `data/raw/`, pa se prekinuti dohvat nastavlja). `--podrucje pilot` računa samo Pilot odsječak, brže je za pokusne izmjene. Parametri izračuna mijenjaju se opcijama, npr. `python -m granice compute --segment-length-m 250 --near-distance-m 80`. Zadane vrijednosti i značenja: [`docs/ugovor-izlaza.md`](docs/ugovor-izlaza.md).
 
 Provjere:
 

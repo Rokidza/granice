@@ -11,15 +11,17 @@ import os
 from dataclasses import fields
 
 from granice.config import (
+    AREAS,
     CORRIDOR_M,
     DATA_DIR,
     DISPUTED_SECTIONS,
     OUT_DIR,
-    PILOT_BBOX,
     RAW_DIR,
     REPO_ROOT,
+    BBox,
 )
 from granice.export import write_layers
+from granice.geofabrik import GeofabrikSource
 from granice.osm import OsmSource, OverpassSource
 from granice.prepare import prepare
 from granice.risk import Params, assess_crossing_risk
@@ -27,7 +29,7 @@ from granice.risk import Params, assess_crossing_risk
 log = logging.getLogger("granice")
 
 
-def run(source: OsmSource, params: Params) -> None:
+def run(source: OsmSource, area: BBox, params: Params) -> None:
     """Fetch (or read from cache), prepare, assess and export. Everything the web page needs."""
     if params.search_radius_m > CORRIDOR_M:
         raise SystemExit(
@@ -41,14 +43,14 @@ def run(source: OsmSource, params: Params) -> None:
         len(data.border),
         data.timestamp,
     )
-    prepared = prepare(data, PILOT_BBOX, DISPUTED_SECTIONS, _manual_crossings())
+    prepared = prepare(data, area, DISPUTED_SECTIONS, _manual_crossings())
     log.info(
         "%d Staza pieces, %d border chains",
         len(prepared.risk_input.staze),
         len(prepared.risk_input.border),
     )
     assessment = assess_crossing_risk(prepared.risk_input, params)
-    write_layers(OUT_DIR, prepared, assessment, params, data.timestamp, DISPUTED_SECTIONS)
+    write_layers(OUT_DIR, prepared, assessment, params, data.timestamp, area, DISPUTED_SECTIONS)
     log.info(
         "%d segments, %d Kritična područja written to %s",
         len(assessment.segments),
@@ -142,6 +144,18 @@ def main() -> None:
     refresh = commands.add_parser("refresh", help="re-download OSM data, then recompute and export")
     compute = commands.add_parser("compute", help="recompute from the cached OSM data")
     for command in (refresh, compute):
+        command.add_argument(
+            "--podrucje",
+            choices=sorted(AREAS),
+            default="cijela",
+            help="cijela = whole HR-BiH border (default), pilot = Pilot odsječak only",
+        )
+        command.add_argument(
+            "--izvor",
+            choices=("geofabrik", "overpass"),
+            default="geofabrik",
+            help="geofabrik = country extracts read locally (default), overpass = public API",
+        )
         _add_parameter_options(command)
     serve = commands.add_parser("serve", help="serve the web page on localhost")
     serve.add_argument("--port", type=int, default=8000)
@@ -151,7 +165,10 @@ def main() -> None:
     if args.command == "serve":
         _serve(args.port)
     else:
-        run(OverpassSource(PILOT_BBOX, RAW_DIR, refresh=args.command == "refresh"), _params(args))
+        area = AREAS[args.podrucje]
+        source_class = GeofabrikSource if args.izvor == "geofabrik" else OverpassSource
+        refresh = args.command == "refresh"
+        run(source_class(area, RAW_DIR, refresh=refresh), area, _params(args))
 
 
 if __name__ == "__main__":

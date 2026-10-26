@@ -50,7 +50,7 @@ Detalji o izvorima i licencama: [`podaci-i-licence.md`](podaci-i-licence.md).
 
 ## Pilot odsječak
 
-Od Dvora na Uni (južno od spornog dijela kod Hrvatske Kostajnice) preko Cetingrada, Slunja i Plitvica do Korenice, Donjeg Lapca i sjeverne Like. Pokriva Bihaćki džep (Velika Kladuša, Cazin, Bihać) i Lička Plješivicu. Procjena je oko 250 km, a točnu duljinu izmjerit će pipeline.
+Pilot je završen i alat pokriva cijelu granicu (vidi „Odluke pri implementaciji (cijela granica)"). Pilot je bio: od Dvora na Uni (južno od spornog dijela kod Hrvatske Kostajnice) preko Cetingrada, Slunja i Plitvica do Korenice, Donjeg Lapca i sjeverne Like. Pokriva Bihaćki džep (Velika Kladuša, Cazin, Bihać) i Lička Plješivicu. Procjena je oko 250 km, a točnu duljinu izmjerit će pipeline.
 
 Zahtjev HCR-u/MUP-u za podatke o minama se ne šalje.
 
@@ -82,7 +82,7 @@ Web dio ide bez automatskih testova, uz ručnu provjeru u pregledniku.
 ## Prihvaćena ograničenja i faza 2
 
 - Rezultati nisu validirani terenskim podacima, što je naznačeno u sučelju.
-- Faza 2: teren i šuma (Copernicus DEM GLO-30, ESA WorldCover), minska polja uz formalni dogovor s HCR-om/MUP-om, cijela granica (Geofabrik).
+- Faza 2: teren i šuma (Copernicus DEM GLO-30, ESA WorldCover), minska polja uz formalni dogovor s HCR-om/MUP-om. Cijela granica (Overpass u pločicama) je gotova; Geofabrik izvatci ostaju moguća zamjena.
 - Ako se rizik-sloj ikad dijeli izvan organizacije, treba ga objaviti pod ODbL-om i prije toga pravno provjeriti.
 
 ## Odluke redom (iz sesije)
@@ -126,3 +126,17 @@ Detalji koje dizajn nije propisivao, a implementacija ih je morala odabrati. Sve
 - **Vodotok:** `waterway=river` (crta) i `natural=water` (površina, uključujući vanjske rubove multipoligona). Rijeka „leži između" kad spojnica najbližeg para siječe vodotok.
 - **Boja u tamnoj temi:** tamni kraj skale nestao bi u podlozi, pa se sidro okreće: u tamnoj temi niski rizik je prigušen, a visoki svijetao i zasićen. Prominentnost uvijek znači rizik. Obje skale prolaze `npm run check-colors`.
 - **Podloga:** MapLibre stranica radi i bez podloge. PMTiles izvadak i fontovi su neobavezni i ne verzioniraju se (README).
+
+## Odluke pri implementaciji (cijela granica)
+
+Proširenje pilota na cijelu granicu HR–BiH (oko 1000 km). Izračun, ugovor izlaza i sučelje ostali su isti; promijenili su se dohvat podataka, popis spornih zona i opseg.
+
+- **Opseg:** samo granica HR–BiH. Granice prema Srbiji i Crnoj Gori nisu uključene (drukčije Strane, drugi relacijski ID-evi); `config.py` i `OverpassSource` bi se morali poopćiti na par država.
+- **Izvor (zadani): Geofabrik.** `GeofabrikSource` čita izvatke `croatia` i `bosnia-herzegovina` (`.osm.pbf`) pyosmiumom, a cijela granica se izračuna za nekoliko minuta. Granica je presjek članova relacija 214885 i 2528142 (svaka se čita iz izvatka svoje države). Overpass označava vrhove Staze državom (`area`), a Geofabrik toga nema, pa se Strana određuje točkom u poligonu države koji se gradi iz vanjskih članova njezine granične relacije; vrhovi na samoj granici nemaju Stranu, kao i prije. Na pilotu daje identičan rezultat kao Overpass (svih 338 segmenata isto stanje i isti rizik). Preuzimanje je ručno (`refresh`), a izvaci su dnevni.
+- **Dohvat s Overpassa (`--izvor overpass`):** granica se dohvaća jednim upitom (svi wayevi zajednički objema relacijama). Okolina (Staze, vodotoci, prijelazi) dohvaća se u pločicama od 0,5° koje granica siječe (`tiles_along`), jer jedan upit za cijelu granicu ne bi stao u Overpass limite. Svaki odgovor se kešira u `data/raw/`, pa se prekinuti dohvat nastavlja. Wayevi na rubu pločica deduplicirani su po OSM ID-u, a Strana vrha računa se iz unije ID-eva čvorova svih pločica.
+- **Granica kao lanac:** cijela granica spaja se u jedan lanac (pilot ih je imao nekoliko), pa Kritična područja ne prelaze preko praznina, a `id` segmenata je `0-<red>`.
+- **Projekcija:** i dalje UTM 33N (EPSG:32633). Istočni kraj granice (oko 19°E) je izvan zone, ali je pogreška mjerila oko 0,08 %, nebitna uz prag od 100 m i više.
+- **Sporne zone:** okvir „Neum i Sutorina" pokrivao je cijelo zaleđe Dubrovnika do Konavala (lat 42,4–42,95, lon 17,6–18,55) i sve bi to isključio iz procjene. Sutorina nije na granici HR–BiH, pa je okvir sužen na „Klek, Školji i Neum" (lat 42,86–43,00, lon 17,50–17,72). Okvir Une proširen je do ušća kod Jasenovca (lon 16,95). Oba su i dalje gruba; treba ih provjeriti.
+- **Rijeka:** Sava je granica na stotinjak kilometara, pa će većina tih segmenata dobiti oznaku „rijeka" i spušten rizik. To je namjerno, ali rezultat za Savu treba tumačiti uz to.
+- **Nepromijenjeno:** nema podataka o minama, a banner je sada relevantan za cijelu granicu (minski sumnjiva područja ima i u Baniji, Lici, zaleđu Zadra i Dubrovnika).
+

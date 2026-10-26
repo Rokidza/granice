@@ -14,11 +14,11 @@ from shapely.geometry import MultiLineString, mapping
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, transform
 
-from granice.config import PILOT_BBOX, DisputedSection
+from granice.config import AREAS, BBox, DisputedSection
 from granice.prepare import Prepared
 from granice.risk import Assessment, KriticnoPodrucje, Params, SegmentGranice
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 COORD_DECIMALS = 5  # about 1 m
 
 
@@ -32,6 +32,7 @@ def write_layers(
     assessment: Assessment,
     params: Params,
     osm_timestamp: str,
+    area: BBox,
     disputed: list[DisputedSection],
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -59,7 +60,8 @@ def write_layers(
             "schema": SCHEMA_VERSION,
             "osm_podaci_od": osm_timestamp,
             "generirano": datetime.now(UTC).isoformat(timespec="seconds"),
-            "pilot_bbox": asdict(PILOT_BBOX),
+            "podrucje": next(name for name, bbox in AREAS.items() if bbox == area),
+            "podrucje_bbox": asdict(area),
             "parametri": asdict(params),
             "sporne_zone": [d.name for d in disputed],
             "broj_segmenata_po_stanju": dict(Counter(s.state for s in assessment.segments)),

@@ -37,5 +37,5 @@ Skup susjednih Segmenata granice čiji je Rizik prelaska iznad praga koji planer
 _Avoid_: Žarište, hotspot, crna točka
 
 **Pilot odsječak**:
-Dio granice na kojem se alat prvo provjerava prije proširenja na cijelu granicu.
+Dio granice na kojem se alat prvo provjeravao prije proširenja na cijelu granicu. Alat sada pokriva cijelu granicu HR–BiH, a Pilot odsječak se još može izračunati zasebno.
 _Avoid_: Testno područje, demo

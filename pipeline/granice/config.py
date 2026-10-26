@@ -1,4 +1,4 @@
-"""Project-wide constants: the Pilot odsječak, OSM relation ids and disputed border sections."""
+"""Project-wide constants: the covered areas, OSM relation ids and disputed border sections."""
 
 from __future__ import annotations
 
@@ -32,6 +32,12 @@ class BBox:
 # northern Lika. Includes the Bihać pocket and Lička Plješivica.
 PILOT_BBOX = BBox(south=44.50, west=15.50, north=45.10, east=16.45)
 
+# The whole HR-BiH border (about 1000 km, lat 42.56-45.28, lon 15.73-19.02), with a small margin.
+BORDER_BBOX = BBox(south=42.50, west=15.65, north=45.35, east=19.10)
+
+# `--podrucje` choices of the command line.
+AREAS = {"cijela": BORDER_BBOX, "pilot": PILOT_BBOX}
+
 # How far from the border Staze are fetched. Must be at least the risk search radius.
 CORRIDOR_M = 3500
 
@@ -45,8 +51,10 @@ class DisputedSection:
 # Disputed sections are marked "sporna granica" and excluded from the risk calculation. The boxes
 # are rough approximations (docs/podaci-i-licence.md: status as of 2026 not verified) and must be
 # reviewed by someone who knows the current situation. None of them lies inside the pilot.
+# Una: the river border from just south of Hrvatska Kostajnica to the mouth at Jasenovac.
+# Klek, Školji and Neum: the Neum corridor and the Klek peninsula; Sutorina is not on the HR-BiH
+# border (it is BiH-Montenegro), so the stretch to Konavle is no longer blanketed.
 DISPUTED_SECTIONS = [
-    DisputedSection("Una kod Hrvatske Kostajnice", BBox(45.15, 16.40, 45.30, 16.65)),
-    DisputedSection("Klek i Školji", BBox(42.88, 17.55, 42.94, 17.62)),
-    DisputedSection("Neum i Sutorina", BBox(42.40, 17.60, 42.95, 18.55)),
+    DisputedSection("Una kod Hrvatske Kostajnice", BBox(45.15, 16.40, 45.30, 16.95)),
+    DisputedSection("Klek, Školji i Neum", BBox(42.86, 17.50, 43.00, 17.72)),
 ]

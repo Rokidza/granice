@@ -794,10 +794,16 @@ function showError(message) {
 }
 
 function boundsOf(features) {
-  const coords = features.flatMap((f) => f.geometry.coordinates);
-  const lons = coords.map((c) => c[0]);
-  const lats = coords.map((c) => c[1]);
-  return [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
+  const bounds = [[Infinity, Infinity], [-Infinity, -Infinity]];
+  for (const feature of features) {
+    for (const [lon, lat] of feature.geometry.coordinates) {
+      bounds[0][0] = Math.min(bounds[0][0], lon);
+      bounds[0][1] = Math.min(bounds[0][1], lat);
+      bounds[1][0] = Math.max(bounds[1][0], lon);
+      bounds[1][1] = Math.max(bounds[1][1], lat);
+    }
+  }
+  return bounds;
 }
 
 async function start() {
@@ -820,6 +826,7 @@ async function start() {
     link.download = file;
     $("data-links").append(link, " ");
   }
+  $("area-tag").textContent = data.meta.podrucje === "pilot" ? "pilot odsječak" : "cijela granica";
   $("osm-date").textContent = `OSM podaci od: ${new Date(data.meta.osm_podaci_od).toLocaleString("hr-HR", { dateStyle: "long", timeStyle: "short" })}`;
 
   state.hasLocalBasemap = await exists(absolute(CONFIG.basemap));
