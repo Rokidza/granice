@@ -1,0 +1,16 @@
+# Generirani i sirovi podaci (OSM, GeoJSON, PMTiles)
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
