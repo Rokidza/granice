@@ -1,7 +1,7 @@
 [project]
 name = "granice"
 version = "0.1.0"
-description = "Crossing-risk pipeline for the HR-BiH border (internal tool, see ADR 0001)"
+description = "Crossing-risk pipeline for the HR-BiH border (see ADR 0001 and 0003)"
 requires-python = ">=3.11"
 dependencies = ["shapely>=2.0", "pyproj>=3.6", "requests>=2.31"]
 

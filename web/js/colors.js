@@ -1,22 +1,44 @@
-// Sequential colour scale for Rizik prelaska: one hue, interpolated in OKLab.
+// Colours of the map: the Rizik prelaska scale, the road categories and the Kritična područja marks.
 //
-// Light theme: pale and faint (low risk) to dark and saturated (high risk).
-// Dark theme: the dark end would vanish into the surface, so the same idea flips its anchor:
-// faint and dim (low risk) to bright and saturated (high risk). Prominence always means risk.
+// Risk is a warm heat scale, pale yellow (low) through orange to red (high), the same in both
+// themes: yellow is pale on a light surface and bright on a dark one, red reads on both, and a
+// thin dark casing keeps the pale end from vanishing on a light map.
 // Run `npm run check-colors` after changing anything here.
 
-export const HUE = 330; // magenta-purple: stays clear of the blue (HR) and orange (BiH) Staze
-
-// OKLCH anchors of the two ends of the scale: [lightness, chroma].
-export const ANCHORS = {
-  light: { low: [0.76, 0.08], high: [0.3, 0.15] },
-  dark: { low: [0.46, 0.08], high: [0.8, 0.19] },
-};
+// OKLCH anchors of the risk scale, low to high: [lightness, chroma, hue].
+export const RISK_ANCHORS = [
+  [0.94, 0.15, 100],
+  [0.76, 0.17, 58],
+  [0.52, 0.21, 25],
+];
 
 export const SURFACES = { light: "#fcfcfb", dark: "#1a1a19" };
 
-// Thin neutral casing under the risk lines, so each end of the scale stands out from the map.
-export const CASING = { light: "#52514e", dark: "#c3c2b7" };
+// Thin neutral casing under the risk band, so each end of the scale stands out from the map.
+export const CASING = { light: "#3d3c39", dark: "#0d0d0d" };
+
+// Road categories drawn like a road map: roads white with an outline, tracks brown, paths dashed.
+export const ROAD_STYLES = {
+  light: {
+    cesta: { fill: "#ffffff", casing: "#85847d" },
+    makadam: { fill: "#b5793a", casing: "#ffffff" },
+    staza: { fill: "#7b4a1e", casing: "#ffffff" },
+  },
+  dark: {
+    cesta: { fill: "#dedcd5", casing: "#0d0d0d" },
+    makadam: { fill: "#e3a85c", casing: "#0d0d0d" },
+    staza: { fill: "#f2d3a0", casing: "#0d0d0d" },
+  },
+};
+
+// The Granična linija: dash-dot, neutral, drawn over a casing of the opposite lightness.
+export const BORDER_COLORS = {
+  light: { line: "#1f1f1e", casing: "#ffffff" },
+  dark: { line: "#f4f2ec", casing: "#0d0d0d" },
+};
+
+// Kritična područja: red circles.
+export const DANGER = { light: "#d7263d", dark: "#ff4d5e" };
 
 const toRad = (deg) => (deg * Math.PI) / 180;
 
@@ -73,23 +95,19 @@ function fitToGamut([l, a, b]) {
 }
 
 /** Colour for a risk index in [0, 1] (1 = highest risk) as "#rrggbb". */
-export function riskColor(index, theme) {
-  const t = Math.min(1, Math.max(0, index));
-  const low = oklchToOklab([...ANCHORS[theme].low, HUE]);
-  const high = oklchToOklab([...ANCHORS[theme].high, HUE]);
-  const lab = low.map((v, i) => v + (high[i] - v) * t);
+export function riskColor(index) {
+  const t = Math.min(1, Math.max(0, index)) * (RISK_ANCHORS.length - 1);
+  const i = Math.min(Math.floor(t), RISK_ANCHORS.length - 2);
+  const low = oklchToOklab(RISK_ANCHORS[i]);
+  const high = oklchToOklab(RISK_ANCHORS[i + 1]);
+  const lab = low.map((v, k) => v + (high[k] - v) * (t - i));
   return linearToHex(fitToGamut(lab));
 }
 
 /** `count` evenly spaced stops of the scale, as [index, colour] pairs. */
-export function riskStops(theme, count = 17) {
+export function riskStops(count = 17) {
   return Array.from({ length: count }, (_, i) => {
     const index = i / (count - 1);
-    return [index, riskColor(index, theme)];
+    return [index, riskColor(index)];
   });
 }
-
-export const STAZA_COLORS = {
-  light: { HR: "#2a78d6", BiH: "#eb6834" },
-  dark: { HR: "#3987e5", BiH: "#d95926" },
-};

@@ -1,9 +1,10 @@
 {
   "name": "granice-web",
   "private": true,
-  "description": "Static map page for the HR-BiH crossing-risk tool (internal, see ADR 0001)",
+  "description": "Static map page for the HR-BiH crossing-risk tool (see ADR 0001 and 0003)",
   "scripts": {
     "vendor": "node tools/vendor.mjs",
+    "build": "node tools/build-dist.mjs",
     "check-colors": "node tools/check-colors.mjs"
   },
   "dependencies": {

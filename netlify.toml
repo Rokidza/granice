@@ -1,0 +1,20 @@
+# Normally the folder is dragged onto https://app.netlify.com/drop (README.md, "Objava na Netlifyju").
+# This file is for the CLI route: cd web && npm run vendor && npm run build, then
+#   netlify deploy --prod --dir=web/dist
+# The same headers are also written to web/dist/_headers by the build, which is what drag and drop uses.
+
+[build]
+  publish = "web/dist"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "no-store"

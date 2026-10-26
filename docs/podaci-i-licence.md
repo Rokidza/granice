@@ -52,6 +52,15 @@ Izvještaj istraživanja iz 2026-10-26. Činjenice je prikupio pomoćni agent s 
 - **Protomaps:** jedna PMTiles datoteka pod ODbL-om, regionalni izvadak `pmtiles extract`, hostanje na vlastitoj statičnoj pohrani. Teren iz Mapterhorn (Terrarium PMTiles). https://docs.protomaps.com/basemaps/downloads
 - **Odabrano:** MapLibre GL s vlastitim Protomaps izvatkom, bez rizika politike tile servera i s radom bez interneta.
 
+## Podloge u sučelju (dodano uz ADR 0002)
+
+Nisu provjerene u ovom istraživanju. Prije šire upotrebe provjeriti uvjete:
+
+- **OpenFreeMap** (Karta): vidi gore, MIT, atribucija "OpenMapTiles + OpenStreetMap".
+- **OpenTopoMap** (Reljef, `tile.opentopomap.org`): CC-BY-SA, atribucija obavezna, javni servis uz načelo "fair use" bez masovnog preuzimanja. https://opentopomap.org/about
+- **Esri World Imagery** (Satelit, `server.arcgisonline.com`): atribucija "Esri, Maxar, Earthstar Geographics, and the GIS User Community". Uvjeti korištenja javnih ArcGIS Online pločica za ovu namjenu nisu potvrđeni.
+- DGU ortofoto ostaje alternativa za satelit ako se licenca potvrdi.
+
 ## Mine
 
 - **Hrvatska:**

@@ -2,35 +2,55 @@
 // UI text is Croatian; code and comments are English. Domain terms follow GLOSSARY.md.
 
 import CONFIG from "./config.js";
-import { CASING, STAZA_COLORS, SURFACES, riskColor, riskStops } from "./js/colors.js";
+import {
+  BORDER_COLORS,
+  CASING,
+  DANGER,
+  ROAD_STYLES,
+  SURFACES,
+  riskColor,
+  riskStops,
+} from "./js/colors.js";
 import {
   areaBounds,
+  areaCircle,
   areasToCsv,
   areasToGeoJson,
   kriticnaPodrucja,
-  riskIndex,
 } from "./js/critical.js";
 
 const $ = (id) => document.getElementById(id);
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 const currentTheme = () => (darkQuery.matches ? "dark" : "light");
+// Colour theme of what is drawn on the map: a light-only (relief) or dark-only (satellite)
+// basemap forces its own palette, otherwise it follows the OS theme.
+const mapTheme = () => {
+  const palette = state.basemap?.palette ?? "system";
+  return palette === "system" ? currentTheme() : palette;
+};
 const number = (digits) =>
   new Intl.NumberFormat("hr-HR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const ink = (theme) => (theme === "dark" ? "#f0efec" : "#0b0b0b");
 const absolute = (path) => new URL(path, document.baseURI).href;
 
 const CATEGORY_LABELS = { cesta: "cesta", makadam: "makadam / šumski put", staza: "staza / puteljak" };
+// Drawn bottom to top, so roads cross over tracks and paths. `casing` is the extra width of the
+// outline under the line.
+const CATEGORIES = ["staza", "makadam", "cesta"];
 const CATEGORY_STYLE = {
-  cesta: { width: 3, dash: null },
-  makadam: { width: 2, dash: null },
-  staza: { width: 1.6, dash: [2, 1.5] },
+  cesta: { width: 2.8, casing: 1.8, casingOpacity: 1, dash: null },
+  makadam: { width: 2, casing: 1.4, casingOpacity: 0.85, dash: null },
+  staza: { width: 1.5, casing: 1.2, casingOpacity: 0.7, dash: [2.2, 1.6] },
 };
+const FIRST_DATA_LAYER = "staze-staza-casing"; // basemap layers go below this one
+const BASEMAP_STORAGE_KEY = "granice.podloga";
 const SEGMENT_LAYERS = [
   "segmenti-rizik",
   "segmenti-nedovoljno",
   "segmenti-sporna",
   "segmenti-prijelaz",
 ];
+const METRES_PER_DEGREE = 111320;
 
 const state = {
   map: null,
@@ -38,9 +58,17 @@ const state = {
   segments: [],
   areas: [],
   selectedArea: null,
-  hasBasemap: false,
-  basemapIds: [],
+  hasLocalBasemap: false,
+  hasGlyphs: false,
+  basemaps: [],
+  basemap: null, // the chosen entry of `basemaps`
+  basemapIds: [], // layers and sources currently added for it
+  basemapSources: [],
+  basemapRequest: 0, // bumped per switch, so a slow style fetch cannot land after a newer choice
+  markers: [], // numbered badges of the Kritična područja on the map
+  showAreaMarks: true,
 };
+const styleCache = new Map();
 
 // ---------------------------------------------------------------------------------------------
 // Data
@@ -136,83 +164,99 @@ const zoomScaled = (width) => [
   "interpolate", ["linear"], ["zoom"], 8, width * 0.8, 12, width * 1.2, 15, width * 2,
 ];
 
+// Roads thin out faster than the risk band when zooming out, so the band stays the main figure.
+const roadScaled = (width) => [
+  "interpolate", ["linear"], ["zoom"], 8, width * 0.45, 12, width, 15, width * 2,
+];
+
 const ICON_SIZE = ["interpolate", ["linear"], ["zoom"], 8, 0.35, 12, 0.7, 15, 1];
 
-function riskExpression(theme) {
-  return ["interpolate", ["linear"], ["get", "rizik"], ...riskStops(theme).flat()];
+function riskExpression() {
+  return ["interpolate", ["linear"], ["get", "rizik"], ...riskStops().flat()];
+}
+
+/**
+ * Circle radius in pixels for a radius in metres (property `radius_m`), so a circle keeps its
+ * size on the ground while zooming. Exponential base 2 between two zooms is exact for that.
+ */
+function circleRadius(latitude) {
+  const metresPerPixelAtZoom0 = 156543.03392 * Math.cos((latitude * Math.PI) / 180);
+  const atZoom = (zoom) => ["max", 12, ["*", ["get", "radius_m"], 2 ** zoom / metresPerPixelAtZoom0]];
+  return ["interpolate", ["exponential", 2], ["zoom"], 8, atZoom(8), 16, atZoom(16)];
 }
 
 /** Paint properties that depend on the colour theme, by layer id. */
 function themedPaint(theme) {
+  const border = BORDER_COLORS[theme];
   const paint = {
     background: { "background-color": SURFACES[theme] },
-    granica: { "line-color": ink(theme) },
+    "granica-casing": { "line-color": border.casing },
+    granica: { "line-color": border.line },
     "segmenti-casing": { "line-color": CASING[theme] },
-    "segmenti-rizik": { "line-color": riskExpression(theme) },
+    "segmenti-rizik": { "line-color": riskExpression() },
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
-    "kriticno-halo": { "line-color": ink(theme) },
     "segmenti-odabir": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
-    "odabrano-podrucje": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
+    "podrucja-halo": { "circle-stroke-color": SURFACES[theme] },
+    "podrucja-krug": { "circle-color": DANGER[theme], "circle-stroke-color": DANGER[theme] },
   };
-  for (const strana of ["HR", "BiH"]) {
-    for (const kategorija of Object.keys(CATEGORY_STYLE)) {
-      paint[stazeLayerId(strana, kategorija)] = { "line-color": STAZA_COLORS[theme][strana] };
-    }
+  for (const category of CATEGORIES) {
+    const { fill, casing } = ROAD_STYLES[theme][category];
+    paint[`staze-${category}`] = { "line-color": fill };
+    paint[`staze-${category}-casing`] = { "line-color": casing };
   }
   return paint;
 }
 
-const stazeLayerId = (strana, kategorija) => `staze-${strana}-${kategorija}`;
-
-function dataLayers(theme) {
+function dataLayers(theme, latitude) {
   const colors = themedPaint(theme);
   const layers = [];
-  for (const strana of ["HR", "BiH"]) {
-    for (const [kategorija, style] of Object.entries(CATEGORY_STYLE)) {
-      const id = stazeLayerId(strana, kategorija);
-      layers.push({
-        id,
-        type: "line",
-        source: "staze",
-        filter: ["all", ["==", ["get", "strana"], strana], ["==", ["get", "kategorija"], kategorija]],
+  for (const category of CATEGORIES) {
+    const style = CATEGORY_STYLE[category];
+    const filter = ["==", ["get", "kategorija"], category];
+    layers.push(
+      {
+        id: `staze-${category}-casing`, type: "line", source: "staze", filter,
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          ...colors[id],
-          "line-width": zoomScaled(style.width),
-          ...(style.dash ? { "line-dasharray": style.dash } : {}),
-          "line-opacity": 0.9,
+          ...colors[`staze-${category}-casing`],
+          "line-width": roadScaled(style.width + style.casing),
+          "line-opacity": style.casingOpacity,
         },
-      });
-    }
+      },
+      {
+        id: `staze-${category}`, type: "line", source: "staze", filter,
+        layout: { "line-cap": style.dash ? "butt" : "round", "line-join": "round" },
+        paint: {
+          ...colors[`staze-${category}`],
+          "line-width": roadScaled(style.width),
+          ...(style.dash ? { "line-dasharray": style.dash } : {}),
+        },
+      },
+    );
   }
-  const critical = ["==", ["get", "kriticno"], true];
   const stanje = (...values) => ["in", ["get", "stanje"], ["literal", values]];
   layers.push(
-    { id: "odabrano-podrucje", type: "line", source: "odabrano",
-      layout: { "line-cap": "round" },
-      paint: { ...colors["odabrano-podrucje"], "line-width": zoomScaled(22), "line-opacity": 0.35 } },
-    { id: "kriticno-halo", type: "line", source: "segmenti",
-      filter: ["all", critical, stanje("procijenjen")],
-      layout: { "line-cap": "butt" },
-      paint: { ...colors["kriticno-halo"], "line-width": zoomScaled(14), "line-opacity": 0.9 } },
     { id: "segmenti-casing", type: "line", source: "segmenti",
       filter: stanje("procijenjen", "nedovoljno_podataka"),
       layout: { "line-cap": "butt" },
-      paint: { ...colors["segmenti-casing"], "line-width": zoomScaled(10) } },
+      paint: { ...colors["segmenti-casing"], "line-width": zoomScaled(9) } },
     { id: "segmenti-rizik", type: "line", source: "segmenti", filter: stanje("procijenjen"),
       layout: { "line-cap": "butt" },
-      paint: { ...colors["segmenti-rizik"], "line-width": zoomScaled(7) } },
+      paint: { ...colors["segmenti-rizik"], "line-width": zoomScaled(6) } },
     { id: "segmenti-nedovoljno", type: "line", source: "segmenti", filter: stanje("nedovoljno_podataka"),
       layout: { "line-cap": "butt" },
-      paint: { "line-pattern": "hatch", "line-width": zoomScaled(7) } },
+      paint: { "line-pattern": "hatch", "line-width": zoomScaled(6) } },
     { id: "segmenti-sporna", type: "line", source: "segmenti", filter: stanje("sporna_granica"),
       paint: { ...colors["segmenti-sporna"], "line-width": zoomScaled(3), "line-dasharray": [2, 2] } },
     { id: "segmenti-prijelaz", type: "line", source: "segmenti", filter: stanje("sluzbeni_prijelaz"),
       paint: { ...colors["segmenti-prijelaz"], "line-width": zoomScaled(4) } },
     { id: "segmenti-odabir", type: "line", source: "segmenti", filter: ["==", ["get", "id"], ""],
       paint: { ...colors["segmenti-odabir"], "line-width": zoomScaled(16), "line-opacity": 0.45 } },
+    { id: "granica-casing", type: "line", source: "granica",
+      paint: { ...colors["granica-casing"], "line-width": 3.4, "line-opacity": 0.85 } },
     { id: "granica", type: "line", source: "granica",
-      paint: { ...colors.granica, "line-width": 1, "line-opacity": 0.8 } },
+      paint: { ...colors.granica, "line-width": 1.6, "line-dasharray": [5, 2, 1.2, 2] } },
     { id: "prijelazi-sluzbeni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "sluzbeni_prijelaz"],
       layout: { "icon-image": "ikona-prijelaz", "icon-allow-overlap": true,
@@ -221,65 +265,191 @@ function dataLayers(theme) {
       filter: ["==", ["get", "tip"], "izravni_prelazak"],
       layout: { "icon-image": "ikona-izravni", "icon-allow-overlap": true,
         "icon-size": ICON_SIZE } },
+    // Kritična područja: a red circle around each, on top of everything else.
+    { id: "podrucja-halo", type: "circle", source: "podrucja",
+      paint: { ...colors["podrucja-halo"], "circle-radius": circleRadius(latitude), "circle-opacity": 0,
+        "circle-stroke-width": 7, "circle-stroke-opacity": 0.8, "circle-pitch-alignment": "map" } },
+    { id: "podrucja-krug", type: "circle", source: "podrucja",
+      paint: { ...colors["podrucja-krug"], "circle-radius": circleRadius(latitude),
+        "circle-opacity": ["case", ["get", "odabrano"], 0.12, 0.04],
+        "circle-stroke-width": 3, "circle-stroke-opacity": 1, "circle-pitch-alignment": "map" } },
   );
   return layers;
 }
 
 const LAYER_GROUPS = [
-  {
-    id: "staze-hr", label: "Staze – HR Strana", swatch: "HR",
-    layers: Object.keys(CATEGORY_STYLE).map((k) => stazeLayerId("HR", k)),
-  },
-  {
-    id: "staze-bih", label: "Staze – BiH Strana", swatch: "BiH",
-    layers: Object.keys(CATEGORY_STYLE).map((k) => stazeLayerId("BiH", k)),
-  },
-  { id: "granica", label: "Granična linija", layers: ["granica"] },
+  { id: "cesta", label: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
+  { id: "makadam", label: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
+  { id: "staza", label: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
+  { id: "granica", label: "Granična linija", layers: ["granica-casing", "granica"] },
   {
     id: "rizik", label: "Rizik prelaska po segmentima",
     layers: [
-      "kriticno-halo", "segmenti-casing", "segmenti-rizik", "segmenti-nedovoljno",
-      "segmenti-sporna", "segmenti-prijelaz", "segmenti-odabir", "odabrano-podrucje",
-      "prijelazi-izravni",
+      "segmenti-casing", "segmenti-rizik", "segmenti-nedovoljno", "segmenti-sporna",
+      "segmenti-prijelaz", "segmenti-odabir", "prijelazi-izravni",
     ],
   },
   { id: "prijelazi", label: "Službeni prijelazi", layers: ["prijelazi-sluzbeni"] },
+  {
+    id: "podrucja", label: "Kritična područja (krugovi)", layers: ["podrucja-halo", "podrucja-krug"],
+    onChange: (visible) => {
+      state.showAreaMarks = visible;
+      for (const marker of state.markers) marker.getElement().style.display = visible ? "" : "none";
+    },
+  },
 ];
 
+/** Re-colours the data layers, legend and Kritična područja for the current palette. */
 function applyTheme() {
-  const theme = currentTheme();
+  const theme = mapTheme();
   const { map } = state;
   for (const [layerId, paint] of Object.entries(themedPaint(theme))) {
     if (!map.getLayer(layerId)) continue;
     for (const [property, value] of Object.entries(paint)) map.setPaintProperty(layerId, property, value);
   }
-  if (state.hasBasemap) addBasemapLayers(theme);
+  $("map").style.setProperty("--danger", DANGER[theme]);
   renderLegend();
-  renderAreaTable();
+  renderAreas();
 }
 
 // ---------------------------------------------------------------------------------------------
-// Basemap (optional Protomaps PMTiles extract, served from the same machine)
+// Basemaps (docs/adr/0002-online-podloge.md). Each one is a set of sources and layers that is
+// added below the data layers, and removed again when another is chosen.
 
-function addBasemapLayers(theme) {
-  const { map } = state;
-  for (const id of state.basemapIds) if (map.getLayer(id)) map.removeLayer(id);
-  const flavor = globalThis.basemaps.namedFlavor(theme);
-  let layers = globalThis.basemaps.layers("protomaps", flavor, { lang: "hr" });
-  if (!state.hasGlyphs) layers = layers.filter((layer) => layer.type !== "symbol");
-  state.basemapIds = layers.map((layer) => layer.id);
-  const before = map.getLayer("staze-HR-cesta") ? "staze-HR-cesta" : undefined;
-  for (const layer of layers) map.addLayer(layer, before);
+async function fetchStyle(url) {
+  if (!styleCache.has(url)) {
+    styleCache.set(url, fetch(url).then((response) => {
+      if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+      return response.json();
+    }));
+  }
+  try {
+    return await styleCache.get(url);
+  } catch (error) {
+    styleCache.delete(url);
+    throw error;
+  }
 }
 
-function setBasemapVisibility(kind) {
+/** The sources, layers and glyphs/sprite of a basemap, ready to add to the map. */
+async function basemapParts(def, theme) {
+  if (def.kind === "none") return { sources: {}, layers: [] };
+  if (def.kind === "raster") {
+    const id = `bm-${def.id}`;
+    return {
+      sources: {
+        [id]: {
+          type: "raster", tiles: def.tiles, tileSize: def.tileSize, maxzoom: def.maxzoom,
+          attribution: def.attribution,
+        },
+      },
+      layers: [{ id, type: "raster", source: id }],
+    };
+  }
+  if (def.kind === "pmtiles") {
+    const flavor = globalThis.basemaps.namedFlavor(theme);
+    let layers = globalThis.basemaps.layers("protomaps", flavor, { lang: "hr" });
+    if (!state.hasGlyphs) layers = layers.filter((layer) => layer.type !== "symbol");
+    return {
+      sources: {
+        protomaps: {
+          type: "vector", url: "pmtiles://" + absolute(CONFIG.basemap),
+          attribution: "Protomaps © OpenStreetMap",
+        },
+      },
+      layers,
+      glyphs: state.hasGlyphs ? absolute(CONFIG.glyphs) : undefined,
+    };
+  }
+  // kind "style": take its sources and layers under a "bm-" prefix, so ids cannot clash with ours.
+  const style = await fetchStyle(def.style[theme]);
+  const sources = Object.fromEntries(Object.entries(style.sources).map(([name, source]) => [`bm-${name}`, source]));
+  const layers = style.layers
+    .filter((layer) => layer.type !== "background")
+    .map((layer) => ({ ...layer, id: `bm-${layer.id}`, source: `bm-${layer.source}` }));
+  return { sources, layers, glyphs: style.glyphs, sprite: style.sprite };
+}
+
+function removeBasemap() {
   const { map } = state;
-  for (const id of state.basemapIds) {
-    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", kind === "map" ? "visible" : "none");
+  for (const id of state.basemapIds) if (map.getLayer(id)) map.removeLayer(id);
+  for (const id of state.basemapSources) if (map.getSource(id)) map.removeSource(id);
+  state.basemapIds = [];
+  state.basemapSources = [];
+}
+
+function setBasemapStatus(message) {
+  $("basemap-status").textContent = message;
+}
+
+/** Makes `def` the visible basemap (or re-adds it, e.g. for the other colour theme). */
+async function showBasemap(def) {
+  const { map } = state;
+  const request = ++state.basemapRequest;
+  state.basemap = def;
+  setBasemapStatus("");
+  try {
+    localStorage.setItem(BASEMAP_STORAGE_KEY, def.id);
+  } catch { /* storage unavailable: the choice just is not remembered */ }
+  applyTheme(); // the palette of the data layers depends on the basemap, so this does not wait
+
+  let parts;
+  try {
+    parts = await basemapParts(def, mapTheme());
+  } catch {
+    if (request !== state.basemapRequest) return;
+    removeBasemap();
+    setBasemapStatus("Podloga nije učitana (nema internetske veze?). Prikazana je obična pozadina.");
+    return;
   }
-  if (map.getLayer("satellite")) {
-    map.setLayoutProperty("satellite", "visibility", kind === "satellite" ? "visible" : "none");
+  if (request !== state.basemapRequest) return;
+
+  removeBasemap();
+  if (parts.glyphs) map.setGlyphs(parts.glyphs);
+  if (parts.sprite) map.setSprite(parts.sprite);
+  for (const [id, source] of Object.entries(parts.sources)) {
+    map.addSource(id, source);
+    state.basemapSources.push(id);
   }
+  const before = map.getLayer(FIRST_DATA_LAYER) ? FIRST_DATA_LAYER : undefined;
+  for (const layer of parts.layers) {
+    map.addLayer(layer, before);
+    state.basemapIds.push(layer.id);
+  }
+}
+
+function setupBasemapChoice() {
+  const group = $("basemap-choice");
+  group.replaceChildren();
+  for (const def of state.basemaps) {
+    const label = document.createElement("label");
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "podloga";
+    radio.value = def.id;
+    radio.checked = def.id === state.basemap.id;
+    radio.addEventListener("change", () => showBasemap(def));
+    label.title = def.label;
+    label.append(radio, element("span", def.short ?? def.label));
+    group.append(label);
+  }
+  // Tile servers fail silently otherwise: a blank map would look like a bug in the app.
+  state.map.on("error", (event) => {
+    if (event.sourceId?.startsWith("bm-") || event.sourceId === "protomaps") {
+      setBasemapStatus("Dio podloge nije učitan (nema internetske veze ili je servis nedostupan).");
+    }
+  });
+}
+
+function initialBasemap() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(BASEMAP_STORAGE_KEY);
+  } catch { /* ignore */ }
+  const wanted = state.basemaps.find((def) => def.id === saved);
+  if (wanted) return wanted;
+  const fallback = state.hasLocalBasemap ? "karta-lokalno" : CONFIG.defaultBasemap;
+  return state.basemaps.find((def) => def.id === fallback) ?? state.basemaps[0];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -298,33 +468,52 @@ function renderToggles() {
       for (const id of group.layers) {
         state.map.setLayoutProperty(id, "visibility", box.checked ? "visible" : "none");
       }
+      group.onChange?.(box.checked);
     });
-    label.append(box);
-    if (group.swatch) {
-      const swatch = document.createElement("span");
-      swatch.className = "swatch";
-      swatch.style.borderTopColor = STAZA_COLORS[currentTheme()][group.swatch];
-      swatch.dataset.strana = group.swatch;
-      label.append(swatch);
-    }
-    label.append(group.label);
+    label.append(box, group.label);
     item.append(label);
     list.append(item);
   }
 }
 
-function refreshToggleSwatches() {
-  for (const swatch of document.querySelectorAll(".swatch[data-strana]")) {
-    swatch.style.borderTopColor = STAZA_COLORS[currentTheme()][swatch.dataset.strana];
-  }
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgElement(tag, attributes) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, String(value));
+  return node;
 }
 
-function legendRow(visual, text) {
-  const row = document.createElement("div");
-  row.className = "legend-row";
-  const label = document.createElement("span");
-  label.className = "label";
-  label.textContent = text;
+/** A small drawing of a map symbol, on the map's own surface colour so it reads like the map. */
+function sample(draw) {
+  const svg = svgElement("svg", { width: 34, height: 18, viewBox: "0 0 34 18" });
+  draw(svg);
+  const box = element("span", undefined, "sample");
+  box.style.background = SURFACES[mapTheme()];
+  box.append(svg);
+  return box;
+}
+
+function sampleLine(svg, color, width, { dash, opacity = 1 } = {}) {
+  svg.append(svgElement("line", {
+    x1: 2, y1: 9, x2: 32, y2: 9, stroke: color, "stroke-width": width,
+    "stroke-opacity": opacity, ...(dash ? { "stroke-dasharray": dash } : {}),
+  }));
+}
+
+function roadSample(category, theme) {
+  const { fill, casing } = ROAD_STYLES[theme][category];
+  const { width, casing: extra, casingOpacity, dash } = CATEGORY_STYLE[category];
+  return sample((svg) => {
+    sampleLine(svg, casing, (width + extra) * 1.5, { opacity: casingOpacity });
+    sampleLine(svg, fill, width * 1.5, { dash: dash?.map((d) => d * 3).join(" ") });
+  });
+}
+
+function legendRow(visual, text, detail) {
+  const row = element("div", undefined, "legend-row");
+  const label = element("span", text, "label");
+  if (detail) label.append(element("small", detail));
   row.append(visual, label);
   return row;
 }
@@ -334,75 +523,78 @@ function imageElement(canvas, alt) {
   image.src = canvas.toDataURL();
   image.alt = alt;
   image.className = "legend-icon";
-  return image;
+  const box = element("span", undefined, "sample");
+  box.append(image);
+  return box;
 }
 
-function lineSwatch(color, width, dashed) {
-  const swatch = document.createElement("span");
-  swatch.className = "swatch" + (dashed ? " dashed" : "");
-  swatch.style.borderTopColor = color;
-  swatch.style.borderTopWidth = width + "px";
-  return swatch;
+function legendGroup(title, ...rows) {
+  const group = element("div", undefined, "legend-group");
+  if (title) group.append(element("div", title, "legend-title"));
+  group.append(...rows);
+  return group;
 }
 
 function renderLegend() {
   const { near_distance_m: near, far_distance_m: far } = state.meta.parametri;
-  const theme = currentTheme();
+  const theme = mapTheme();
   const legend = $("legend");
   legend.replaceChildren();
 
-  const title = document.createElement("div");
-  title.textContent = "Rizik prelaska: zračna udaljenost najbližeg para Staza HR–BiH u segmentu";
-  title.className = "muted";
-  legend.append(title);
-
-  const ramp = document.createElement("div");
-  ramp.className = "ramp";
+  // Risk scale
+  const ramp = element("div", undefined, "ramp");
   ramp.setAttribute("role", "img");
   ramp.setAttribute("aria-label", `Skala rizika od ${near} m (najviši) do ${far} m (najniži)`);
-  const stops = riskStops(theme).map(([index, color]) => `${color} ${((1 - index) * 100).toFixed(1)}%`);
+  const stops = riskStops().map(([index, color]) => `${color} ${((1 - index) * 100).toFixed(1)}%`);
   ramp.style.background = `linear-gradient(to right, ${stops.reverse().join(", ")})`;
   for (const d of [250, 500, 1000]) {
-    const tick = document.createElement("span");
-    tick.className = "tick";
+    const tick = element("span", `${d} m`, "tick");
     tick.style.left = (Math.log(d / near) / Math.log(far / near)) * 100 + "%";
-    tick.textContent = `${d} m`;
     ramp.append(tick);
   }
-  legend.append(ramp);
-  const caption = document.createElement("div");
-  caption.className = "ramp-caption";
-  caption.append(
-    ...[`viši rizik (≤ ${near} m)`, `niži rizik (≥ ${far} m)`].map((text) =>
-      Object.assign(document.createElement("span"), { textContent: text }),
+  const caption = element("div", undefined, "ramp-caption");
+  caption.append(element("span", `viši rizik (≤ ${near} m)`), element("span", `niži rizik (≥ ${far} m)`));
+
+  const hatch = element("span", undefined, "hatch-swatch");
+  const hatchBox = element("span", undefined, "sample");
+  hatchBox.append(hatch);
+  legend.append(
+    legendGroup(
+      "Rizik prelaska: zračna udaljenost najbližeg para Staza HR–BiH u segmentu",
+      ramp,
+      caption,
+      legendRow(hatchBox, "Nedovoljno podataka", "S barem jedne Strane nema mapiranih Staza. To nije nizak rizik."),
+      legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak", "Staza presijeca granicu izvan Službenog prijelaza (najviši rizik)."),
+      legendRow(imageElement(sluzbeniPrijelazCanvas(), ""), "Službeni prijelaz", "Susjedni segmenti izuzeti su iz procjene."),
+      legendRow(sample((svg) => sampleLine(svg, ink(theme), 2.4, { dash: "5 4" })), "Sporna granica", "Rizik se ne računa."),
+    ),
+    legendGroup(
+      "Kritična područja",
+      legendRow(
+        sample((svg) => {
+          svg.append(svgElement("circle", { cx: 17, cy: 10, r: 7.5, fill: DANGER[theme], "fill-opacity": 0.12, stroke: DANGER[theme], "stroke-width": 2.4 }));
+          svg.append(svgElement("circle", { cx: 17, cy: 2.5, r: 3, fill: DANGER[theme], stroke: "#fff", "stroke-width": 1 }));
+        }),
+        "Kritično područje",
+        "Niz susjednih segmenata s visokim rizikom. Broj je rang.",
+      ),
+    ),
+    legendGroup(
+      "Staze i granica",
+      legendRow(roadSample("cesta", theme), "Cesta"),
+      legendRow(roadSample("makadam", theme), "Makadam / šumski put"),
+      legendRow(roadSample("staza", theme), "Staza / puteljak"),
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, BORDER_COLORS[theme].casing, 5, { opacity: 0.85 });
+          sampleLine(svg, BORDER_COLORS[theme].line, 2.2, { dash: "7 3 2 3" });
+        }),
+        "Granična linija",
+      ),
     ),
   );
-  legend.append(caption);
-
-  const hatch = document.createElement("span");
-  hatch.className = "hatch-swatch";
-  legend.append(
-    legendRow(hatch, "Nedovoljno podataka: s barem jedne Strane nema mapiranih Staza (nije nizak rizik)"),
-    legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak: Staza presijeca granicu izvan Službenog prijelaza (najviši rizik)"),
-    legendRow(imageElement(sluzbeniPrijelazCanvas(), ""), "Službeni prijelaz (susjedni segmenti izuzeti iz procjene)"),
-    legendRow(lineSwatch(ink(theme), 2, true), "Sporna granica (rizik se ne računa)"),
-    legendRow(lineSwatch(ink(theme), 6, false), "Obrub: Kritično područje"),
-  );
-  const note = document.createElement("div");
-  note.className = "muted";
-  note.textContent = "Oznaka „rijeka”: vodotok između najbližeg para Staza spušta rizik za jedan stupanj.";
+  const note = element("p", "Oznaka „rijeka”: vodotok između najbližeg para Staza spušta rizik za jedan stupanj.", "legend-title");
   legend.append(note);
-
-  const colors = STAZA_COLORS[theme];
-  legend.append(
-    legendRow(lineSwatch(colors.HR, 3, false), "Staze HR Strane"),
-    legendRow(lineSwatch(colors.BiH, 3, false), "Staze BiH Strane"),
-  );
-  const kategorije = document.createElement("div");
-  kategorije.className = "muted";
-  kategorije.textContent = "Kategorije: cesta (debela crta), makadam / šumski put (srednja), staza / puteljak (isprekidana).";
-  legend.append(kategorije);
-  refreshToggleSwatches();
 }
 
 const kilometres = (metres) =>
@@ -413,68 +605,88 @@ function recomputeAreas() {
   $("threshold-value").textContent = `${threshold} m`;
   state.areas = kriticnaPodrucja(state.segments, threshold, state.meta.parametri);
   state.selectedArea = null;
-
-  const criticalIds = new Set(state.areas.flatMap((a) => a.segments.map((s) => s.properties.id)));
-  const source = state.map.getSource("segmenti");
-  source.setData({
-    type: "FeatureCollection",
-    features: state.segments.map((s) => ({
-      ...s,
-      properties: { ...s.properties, kriticno: criticalIds.has(s.properties.id) },
-    })),
-  });
-  state.map.getSource("odabrano").setData({ type: "FeatureCollection", features: [] });
-  renderAreaTable();
+  renderAreas();
 }
 
-function renderAreaTable() {
-  const body = document.querySelector("#areas tbody");
-  body.replaceChildren();
+const shownAreas = () => {
   const topN = Math.max(1, Number($("top-n").value) || CONFIG.topN);
-  const shown = state.areas.slice(0, topN);
-  const total = state.areas.reduce((sum, a) => sum + a.lengthM, 0);
-  $("areas-summary").textContent = state.areas.length
-    ? `${state.areas.length} Kritičnih područja, ukupno ${kilometres(total)}. Prikazano prvih ${shown.length}.`
-    : "Nema Kritičnih područja uz ovaj prag.";
+  return state.areas.slice(0, topN);
+};
 
+/** The list in the sidebar and the circles with numbered badges on the map. */
+function renderAreas() {
+  const shown = shownAreas();
+  const total = state.areas.reduce((sum, a) => sum + a.lengthM, 0);
+  const summary = $("areas-summary");
+  summary.replaceChildren();
+  if (state.areas.length) {
+    const n = state.areas.length;
+    summary.append(
+      element("strong", String(n)), ` ${n % 10 === 1 && n % 100 !== 11 ? "područje" : "područja"} · `,
+      element("strong", kilometres(total)), ` ukupno. Prikazano prvih ${shown.length}.`,
+    );
+  } else {
+    summary.textContent = "Nema Kritičnih područja uz ovaj prag.";
+  }
+
+  const list = $("areas");
+  list.replaceChildren();
   for (const area of shown) {
-    const row = document.createElement("tr");
-    row.tabIndex = 0;
-    row.dataset.rang = String(area.rang);
-    row.setAttribute("aria-label", `Kritično područje ${area.rang}, zumiraj na kartu`);
-    if (state.selectedArea === area.rang) row.classList.add("selected");
-    const chip = document.createElement("span");
-    chip.className = "risk-chip";
-    chip.style.background = riskColor(area.peakRisk, currentTheme());
-    const first = document.createElement("td");
-    first.append(chip, String(area.rang));
-    row.append(first);
-    for (const text of [
-      kilometres(area.lengthM),
-      `${number(0).format(area.minDistanceM)} m`,
-      number(2).format(area.peakRisk),
-    ]) {
-      const cell = document.createElement("td");
-      cell.textContent = text;
-      row.append(cell);
-    }
+    const item = element("li", undefined, "area" + (state.selectedArea === area.rang ? " selected" : ""));
+    item.tabIndex = 0;
+    item.dataset.rang = String(area.rang);
+    item.setAttribute("role", "button");
+    item.setAttribute("aria-label", `Kritično područje ${area.rang}, zumiraj na kartu`);
+    const main = element("div", undefined, "area-main");
+    main.append(element("strong", kilometres(area.lengthM)), element("span", `najbliži par ${number(0).format(area.minDistanceM)} m`));
+    const pill = element("span", number(2).format(area.peakRisk), "risk-pill");
+    pill.style.background = riskColor(area.peakRisk);
+    if (area.peakRisk >= 0.62) pill.style.color = "#fff"; // dark red end of the scale
+    pill.title = "Rizik prelaska (od 0 do 1)";
+    item.append(element("span", String(area.rang), "badge"), main, pill);
     const select = () => selectArea(area);
-    row.addEventListener("click", select);
-    row.addEventListener("keydown", (event) => {
+    item.addEventListener("click", select);
+    item.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         select();
       }
     });
-    body.append(row);
+    list.append(item);
   }
+  renderAreaMarks(shown);
+}
+
+function renderAreaMarks(shown) {
+  const { map } = state;
+  const circles = shown.map((area) => ({ area, ...areaCircle(area) }));
+  map.getSource("podrucja")?.setData({
+    type: "FeatureCollection",
+    features: circles.map(({ area, lon, lat, radiusM }) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lon, lat] },
+      properties: { rang: area.rang, radius_m: radiusM, odabrano: area.rang === state.selectedArea },
+    })),
+  });
+  for (const marker of state.markers) marker.remove();
+  state.markers = circles.map(({ area, lon, lat, radiusM }) => {
+    const badge = element("button", String(area.rang), "area-badge" + (area.rang === state.selectedArea ? " selected" : ""));
+    badge.type = "button";
+    badge.setAttribute("aria-label", `Kritično područje ${area.rang}`);
+    badge.addEventListener("click", () => selectArea(area));
+    if (!state.showAreaMarks) badge.style.display = "none";
+    // On the top edge of the circle, so the badge does not cover the Staze inside it.
+    return new globalThis.maplibregl.Marker({ element: badge })
+      .setLngLat([lon, lat + radiusM / METRES_PER_DEGREE])
+      .addTo(map);
+  });
 }
 
 function selectArea(area) {
   state.selectedArea = area.rang;
-  state.map.getSource("odabrano").setData(areasToGeoJson([area]));
-  state.map.fitBounds(areaBounds(area), { padding: 90, maxZoom: 14, duration: 600 });
-  renderAreaTable();
+  state.map.fitBounds(areaBounds(area), { padding: 140, maxZoom: 14, duration: 600 });
+  renderAreas();
+  document.querySelector(`.area[data-rang="${area.rang}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
 function download(filename, type, text) {
@@ -602,23 +814,33 @@ async function start() {
   const params = data.meta.parametri;
   $("threshold").value = String(params.critical_distance_m);
   $("top-n").value = String(CONFIG.topN);
+  for (const [name, file] of [["segmenti", "segmenti.geojson"], ["staze", "staze.geojson"], ["granica", "granica.geojson"], ["prijelazi", "prijelazi.geojson"]]) {
+    const link = element("a", name);
+    link.href = CONFIG.dataDir + file;
+    link.download = file;
+    $("data-links").append(link, " ");
+  }
   $("osm-date").textContent = `OSM podaci od: ${new Date(data.meta.osm_podaci_od).toLocaleString("hr-HR", { dateStyle: "long", timeStyle: "short" })}`;
 
-  state.hasBasemap = await exists(absolute(CONFIG.basemap));
-  state.hasGlyphs = state.hasBasemap && await exists(absolute(CONFIG.glyphs).replace("{fontstack}", "Noto Sans Regular").replace("{range}", "0-255"));
-  if (state.hasBasemap) {
+  state.hasLocalBasemap = await exists(absolute(CONFIG.basemap));
+  state.hasGlyphs = state.hasLocalBasemap && await exists(absolute(CONFIG.glyphs).replace("{fontstack}", "Noto Sans Regular").replace("{range}", "0-255"));
+  state.basemaps = [...CONFIG.basemaps];
+  if (state.hasLocalBasemap) {
     globalThis.maplibregl.addProtocol("pmtiles", new globalThis.pmtiles.Protocol().tile);
+    state.basemaps.unshift({ id: "karta-lokalno", label: "Karta (lokalno, bez interneta)", short: "Lokalno", kind: "pmtiles", palette: "system" });
   }
+  state.basemap = initialBasemap();
 
-  const theme = currentTheme();
+  const theme = mapTheme();
+  const bounds = boundsOf(data.granica.features);
+  const latitude = (bounds[0][1] + bounds[1][1]) / 2;
   const map = new globalThis.maplibregl.Map({
     container: "map",
     attributionControl: false,
-    bounds: boundsOf(data.granica.features),
+    bounds,
     fitBoundsOptions: { padding: 40 },
     style: {
       version: 8,
-      ...(state.hasGlyphs ? { glyphs: absolute(CONFIG.glyphs) } : {}),
       sources: {},
       layers: [{ id: "background", type: "background", paint: themedPaint(theme).background }],
     },
@@ -627,7 +849,7 @@ async function start() {
   if (new URLSearchParams(location.search).has("debug")) globalThis.__map = map; // for manual checks
   map.addControl(new globalThis.maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.addControl(new globalThis.maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-  map.addControl(new globalThis.maplibregl.AttributionControl({ customAttribution: "© OpenStreetMap contributors" }), "bottom-left");
+  map.addControl(new globalThis.maplibregl.AttributionControl({ customAttribution: "Staze i granica: © OpenStreetMap contributors" }), "bottom-left");
 
   map.on("load", () => {
     map.addImage("hatch", imageData(hatchCanvas()), { pixelRatio: 2 });
@@ -638,50 +860,24 @@ async function start() {
     map.addSource("granica", { type: "geojson", data: data.granica });
     map.addSource("segmenti", { type: "geojson", data: data.segmenti });
     map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
-    map.addSource("odabrano", { type: "geojson", data: empty });
-    if (state.hasBasemap) {
-      map.addSource("protomaps", { type: "vector", url: "pmtiles://" + absolute(CONFIG.basemap), attribution: "Protomaps © OpenStreetMap" });
-    }
-    if (CONFIG.satellite) {
-      map.addSource("satellite", { type: "raster", tiles: [CONFIG.satellite], tileSize: 256, attribution: CONFIG.satelliteAttribution });
-      map.addLayer({ id: "satellite", type: "raster", source: "satellite", layout: { visibility: "none" } });
-    }
-    for (const layer of dataLayers(theme)) map.addLayer(layer);
-    if (state.hasBasemap) addBasemapLayers(theme);
+    map.addSource("podrucja", { type: "geojson", data: empty });
+    for (const layer of dataLayers(theme, latitude)) map.addLayer(layer);
 
     renderToggles();
     setupBasemapChoice();
+    showBasemap(state.basemap);
     setupClicks();
     setupExport();
     recomputeAreas();
-    renderLegend();
   });
 
   $("threshold").addEventListener("input", () => {
     if (map.loaded()) recomputeAreas();
   });
-  $("top-n").addEventListener("input", renderAreaTable);
+  $("top-n").addEventListener("input", renderAreas);
   darkQuery.addEventListener("change", () => {
-    map.setPaintProperty("background", "background-color", themedPaint(currentTheme()).background);
-    applyTheme();
+    showBasemap(state.basemap); // "Karta" has a style per theme; this applies the palette too
   });
-}
-
-function setupBasemapChoice() {
-  if (!CONFIG.satellite) return;
-  const fieldset = $("basemap-choice");
-  fieldset.hidden = false;
-  for (const [value, text] of [["map", "Karta"], ["satellite", "Satelit / topografska"]]) {
-    const label = document.createElement("label");
-    const radio = document.createElement("input");
-    radio.type = "radio";
-    radio.name = "podloga";
-    radio.value = value;
-    radio.checked = value === "map";
-    radio.addEventListener("change", () => setBasemapVisibility(value));
-    label.append(radio, text);
-    fieldset.append(label);
-  }
 }
 
 start();

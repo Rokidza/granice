@@ -16,6 +16,7 @@ Thumbs.db
 .idea/
 web/node_modules/
 web/vendor/
+web/dist/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
