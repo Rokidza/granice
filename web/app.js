@@ -620,7 +620,7 @@ function renderLegend() {
           svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: SURFACES[theme], "fill-opacity": FOG_OPACITY }));
         }),
         `Dalje od ${corridorText()} od granice (zamagljeno)`,
-        "Taj dio ceste ne ulazi u izračun. Udaljenost se mijenja poljem „Ceste do … m od granice”.",
+        "Taj dio ceste ne ulazi u izračun. Udaljenost se bira u izborniku „Ceste do … od granice”.",
       ),
       legendRow(
         sample((svg) => {
@@ -655,13 +655,10 @@ function readBand(moved) {
 // ---------------------------------------------------------------------------------------------
 // Corridor: how far from the border roads count (max_border_distance_m). The pipeline computes
 // the segments for a list of values (meta.pojasevi_m, docs/ugovor-izlaza.md); the planner types
-// one in and the page loads the nearest of them.
+// one from a dropdown and the page loads its file.
 
 const corridorText = () => metres(state.corridorM);
 const fogData = (choice) => ({ type: "Feature", geometry: choice.magla, properties: {} });
-
-const nearestChoice = (value) =>
-  state.meta.pojasevi_m.reduce((best, d) => (Math.abs(d - value) < Math.abs(best - value) ? d : best));
 
 function loadCorridor(distanceM) {
   if (!state.corridorFiles.has(distanceM)) {
@@ -687,52 +684,39 @@ function applyCorridor(choice) {
   recomputeAreas();
 }
 
-/** Loads and shows the corridor nearest to a typed value. `final` (Enter, leaving the field) also
- * puts that value in the field; while typing it is left alone. */
-async function chooseCorridor(typed, final) {
-  if (!Number.isFinite(typed) || typed <= 0) return;
-  const choice = nearestChoice(typed);
+/** Loads and shows one of the precomputed corridors. */
+async function chooseCorridor(choice) {
   const request = ++state.corridorRequest;
   const status = $("corridor-status");
-  const note = choice === typed ? "" : `Izračunato je samo za neke vrijednosti: prikazano za najbližu, ${metres(choice)}.`;
-  if (final) $("corridor").value = String(choice);
-  if (choice === state.corridorM) {
-    status.textContent = note;
-    return;
-  }
   status.textContent = `Učitavam podatke za ${metres(choice)}…`;
   try {
     const data = await loadCorridor(choice);
     if (request !== state.corridorRequest) return;
     applyCorridor(data);
-    status.textContent = note;
+    status.textContent = "";
   } catch (error) {
     if (request !== state.corridorRequest) return;
+    $("corridor").value = String(state.corridorM); // back to what the map shows
     status.textContent = `Podaci za ${metres(choice)} nisu učitani (${error.message}).`;
   }
 }
 
-function setupCorridorInput(available) {
-  const input = $("corridor");
-  input.value = String(state.corridorM);
-  const choices = state.meta.pojasevi_m ?? [];
-  if (!available || choices.length < 2) {
-    input.disabled = true;
+/** The dropdown lists the corridors the pipeline computed (meta.pojasevi_m). */
+function setupCorridorChoice(available) {
+  const select = $("corridor");
+  const choices = available ? state.meta.pojasevi_m ?? [] : [];
+  select.replaceChildren(...(choices.length ? choices : [state.corridorM]).map((d) => {
+    const option = element("option", metres(d));
+    option.value = String(d);
+    return option;
+  }));
+  select.value = String(state.corridorM);
+  if (choices.length < 2) {
+    select.disabled = true;
     $("corridor-status").textContent = "Druge udaljenosti nisu izračunate (pokrenite python -m granice compute).";
     return;
   }
-  input.min = String(choices[0]);
-  input.max = String(choices[choices.length - 1]);
-  input.step = String(choices[1] - choices[0]);
-  let timer = null;
-  input.addEventListener("input", () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => chooseCorridor(input.valueAsNumber, false), 450);
-  });
-  input.addEventListener("change", () => {
-    clearTimeout(timer);
-    chooseCorridor(input.valueAsNumber, true);
-  });
+  select.addEventListener("change", () => chooseCorridor(Number(select.value)));
 }
 
 /** The sliders reach the farthest pair in the data, rounded up to 500 m. */
@@ -1060,7 +1044,7 @@ async function start() {
     setupClicks();
     setupHover();
     setupMeasure();
-    setupCorridorInput(firstCorridor !== null);
+    setupCorridorChoice(firstCorridor !== null);
     recomputeAreas();
   });
 

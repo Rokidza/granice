@@ -66,7 +66,7 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 
 ## `pojasevi/<m>.json`
 
-Jedna datoteka po vrijednosti iz `meta.json` → `pojasevi_m` (npr. `pojasevi/750.json`). Planer na stranici upiše koliko daleko od granice ceste ulaze u izračun, a stranica učita najbližu izračunatu vrijednost.
+Jedna datoteka po vrijednosti iz `meta.json` → `pojasevi_m` (npr. `pojasevi/750.json`). Planer na stranici iz izbornika odabere koliko daleko od granice ceste ulaze u izračun, a stranica učita tu datoteku.
 
 | ključ | značenje |
 |---|---|

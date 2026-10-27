@@ -101,6 +101,10 @@ input[type="range"] { width: 100%; accent-color: var(--danger); margin: 0; }
 label.inline { display: flex; align-items: center; gap: 8px; }
 .corridor-status { margin: -4px 0 0; font-size: 12px; }
 .corridor-status:empty { display: none; }
+select {
+  background: var(--raised); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit;
+}
 input[type="number"] {
   width: 64px; background: var(--raised); color: var(--ink);
   border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit;
