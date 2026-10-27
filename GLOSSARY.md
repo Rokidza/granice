@@ -33,7 +33,7 @@ Staza koja presijeca graničnu liniju izvan Službenog prijelaza. Segment u koje
 _Avoid_: Probijanje, rupa
 
 **Kritično područje**:
-Skup susjednih Segmenata granice čiji je Rizik prelaska iznad praga koji planeri smatraju visokim.
+Skup susjednih Segmenata granice koje planer smatra visokim rizikom. Na karti su to segmenti čiji je najbliži par Staza u rasponu udaljenosti koji planer odabere (npr. 1000–1200 m); izračun (`kriticna_podrucja.geojson`) i dalje koristi prag Rizika prelaska.
 _Avoid_: Žarište, hotspot, crna točka
 
 **Pilot odsječak**:

@@ -14,11 +14,11 @@ from shapely.geometry import MultiLineString, mapping
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, transform
 
-from granice.config import AREAS, BBox, DisputedSection
+from granice.config import AREAS, RISK_CATEGORIES, BBox, DisputedSection
 from granice.prepare import Prepared
 from granice.risk import Assessment, KriticnoPodrucje, Params, SegmentGranice
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 COORD_DECIMALS = 5  # about 1 m
 
 
@@ -63,6 +63,7 @@ def write_layers(
             "podrucje": next(name for name, bbox in AREAS.items() if bbox == area),
             "podrucje_bbox": asdict(area),
             "parametri": asdict(params),
+            "kategorije_izracuna": list(RISK_CATEGORIES),
             "sporne_zone": [d.name for d in disputed],
             "broj_segmenata_po_stanju": dict(Counter(s.state for s in assessment.segments)),
             "atribucija": "© OpenStreetMap contributors",
@@ -103,13 +104,14 @@ def _segment(prepared: Prepared, segment: SegmentGranice) -> dict[str, Any]:
         "rijeka": "rijeka" in segment.flags,
         "izravni_prelazak": "izravni_prelazak" in segment.flags,
     }
-    for prefix, way_id, category in (
-        ("hr", segment.hr_way_id, segment.hr_category),
-        ("bih", segment.bih_way_id, segment.bih_category),
+    for prefix, way_id, category, border_distance in (
+        ("hr", segment.hr_way_id, segment.hr_category, segment.hr_border_distance_m),
+        ("bih", segment.bih_way_id, segment.bih_category, segment.bih_border_distance_m),
     ):
         properties[f"{prefix}_staza_id"] = way_id
         properties[f"{prefix}_staza_naziv"] = tags.get(way_id or -1, {}).get("name")
         properties[f"{prefix}_staza_kategorija"] = category
+        properties[f"{prefix}_od_granice_m"] = _round(border_distance, 1)
     return _feature(prepared.to_wgs84, segment.geometry, properties)
 
 

@@ -8,12 +8,13 @@ Promjena oblika podataka podiže `schema` u `meta.json`.
 
 | ključ | značenje |
 |---|---|
-| `schema` | verzija ugovora (trenutno 2) |
+| `schema` | verzija ugovora (trenutno 3) |
 | `osm_podaci_od` | vrijeme OSM podataka (ISO 8601), prikazuje se kao „OSM podaci od: …" |
 | `generirano` | vrijeme izračuna |
 | `podrucje` | `cijela` (cijela granica HR–BiH) \| `pilot` (samo Pilot odsječak) |
 | `podrucje_bbox` | `south, west, north, east` izračunatog područja |
 | `parametri` | svi parametri izračuna (vidi tablicu ispod); web iz njih računa indeks i Kritična područja |
+| `kategorije_izracuna` | kategorije Staza koje ulaze u izračun (trenutno samo `cesta`); ostale se samo prikazuju |
 | `sporne_zone` | nazivi područja označenih kao sporna granica |
 | `broj_segmenata_po_stanju` | brojač po `stanje` |
 | `atribucija` | „© OpenStreetMap contributors" |
@@ -52,11 +53,12 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 | `lanac`, `red` | lanac granice i redni broj segmenta u njemu (susjedni segmenti imaju `red` za 1 veći) |
 | `stanje` | `procijenjen` \| `nedovoljno_podataka` \| `sluzbeni_prijelaz` \| `sporna_granica` |
 | `rizik` | indeks 0–1; `null` osim za `procijenjen` |
-| `udaljenost_m` | zračna udaljenost najbližeg para Staza; `null` osim za `procijenjen` |
+| `udaljenost_m` | zračna udaljenost najbližeg para Staza (samo `kategorije_izracuna`); `null` osim za `procijenjen` |
 | `duljina_m` | duljina segmenta |
 | `rijeka` | vodotok leži između najbližeg para |
 | `izravni_prelazak` | Staza presijeca granicu izvan Službenog prijelaza (`rizik` je 1) |
 | `hr_staza_id`, `hr_staza_naziv`, `hr_staza_kategorija` | najbliža Staza HR Strane (isto `bih_…`) |
+| `hr_od_granice_m`, `bih_od_granice_m` | koliko je kraj najbližeg para na toj Strani udaljen od granične linije; `null` osim za `procijenjen` |
 
 ## `prijelazi.geojson`
 
@@ -64,7 +66,7 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 
 ## `kriticna_podrucja.geojson`
 
-Kritična područja pri zadanom pragu, poredana po `rang` (najviši vrh rizika, zatim duljina). Web ih sam preračunava kad planer promijeni prag, pa je ova datoteka namijenjena drugim alatima.
+Kritična područja pri zadanom pragu, poredana po `rang` (najviši vrh rizika, zatim duljina). Datoteka je namijenjena drugim alatima: web je ne čita, nego Kritična područja računa sam iz raspona udaljenosti najbližeg para koji planer odabere (`udaljenost_m` u `segmenti.geojson`).
 
 `rang`, `lanac`, `prvi_segment`, `zadnji_segment`, `broj_segmenata`, `duljina_m`, `najmanja_udaljenost_m`, `vrh_rizika`.
 

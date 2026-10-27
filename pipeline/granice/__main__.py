@@ -8,7 +8,7 @@ import functools
 import http.server
 import logging
 import os
-from dataclasses import fields
+from dataclasses import fields, replace
 
 from granice.config import (
     AREAS,
@@ -18,6 +18,7 @@ from granice.config import (
     OUT_DIR,
     RAW_DIR,
     REPO_ROOT,
+    RISK_CATEGORIES,
     BBox,
 )
 from granice.export import write_layers
@@ -49,7 +50,12 @@ def run(source: OsmSource, area: BBox, params: Params) -> None:
         len(prepared.risk_input.staze),
         len(prepared.risk_input.border),
     )
-    assessment = assess_crossing_risk(prepared.risk_input, params)
+    risk_input = replace(
+        prepared.risk_input,
+        staze=[s for s in prepared.risk_input.staze if s.category in RISK_CATEGORIES],
+    )
+    log.info("%d Staza pieces of categories %s in the calculation", len(risk_input.staze), RISK_CATEGORIES)
+    assessment = assess_crossing_risk(risk_input, params)
     write_layers(OUT_DIR, prepared, assessment, params, data.timestamp, area, DISPUTED_SECTIONS)
     log.info(
         "%d segments, %d Kritična područja written to %s",

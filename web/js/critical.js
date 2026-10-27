@@ -12,6 +12,25 @@ export function inBand(p, band) {
 }
 
 /**
+ * The Staze of the nearest pairs of segments within the band, per Strana: OSM way id → how far
+ * from the border its end of the pair lies, one value per segment it is the nearest Staza of.
+ * @returns {{HR: Map<number, number[]>, BiH: Map<number, number[]>}}
+ */
+export function includedStaze(segments, band) {
+  const included = { HR: new Map(), BiH: new Map() };
+  for (const { properties: p } of segments) {
+    if (!inBand(p, band)) continue;
+    for (const [strana, prefix] of [["HR", "hr"], ["BiH", "bih"]]) {
+      const id = p[`${prefix}_staza_id`];
+      const distances = included[strana].get(id) ?? [];
+      distances.push(p[`${prefix}_od_granice_m`]);
+      included[strana].set(id, distances);
+    }
+  }
+  return included;
+}
+
+/**
  * Runs of adjacent segments within the band, longest first and then by the closest pair.
  * @param {object[]} segments GeoJSON features from segmenti.geojson
  */

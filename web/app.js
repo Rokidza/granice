@@ -14,6 +14,7 @@ import {
   areaCircle,
   areasToCsv,
   areasToGeoJson,
+  includedStaze,
   kriticnaPodrucja,
 } from "./js/critical.js";
 
@@ -40,7 +41,7 @@ const CATEGORY_STYLE = {
   makadam: { width: 2, casing: 1.4, casingOpacity: 0.85, dash: null },
   staza: { width: 1.5, casing: 1.2, casingOpacity: 0.7, dash: [2.2, 1.6] },
 };
-const FIRST_DATA_LAYER = "staze-staza-casing"; // basemap layers go below this one
+const FIRST_DATA_LAYER = "staze-ukljucene"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
 const SEGMENT_LAYERS = [
   "segmenti-raspon",
@@ -58,6 +59,7 @@ const state = {
   areas: [],
   selectedArea: null,
   band: { ...CONFIG.band }, // nearest-pair distances (m) drawn red and grouped into Kritična područja
+  included: { HR: new Map(), BiH: new Map() }, // Staze of those nearest pairs (includedStaze)
   hasLocalBasemap: false,
   hasGlyphs: false,
   basemaps: [],
@@ -193,12 +195,20 @@ function bandFilters({ minM, maxM }) {
   };
 }
 
+/** Filter of the halo under the Staze of the nearest pairs within the band. */
+function includedFilter(included) {
+  return ["any", ...Object.entries(included).map(([strana, ids]) => [
+    "all", ["==", ["get", "strana"], strana], ["in", ["get", "id"], ["literal", [...ids.keys()]]],
+  ])];
+}
+
 /**
  * Circle radius in pixels for a radius in metres (property `radius_m`), so a circle keeps its
  * size on the ground while zooming. Exponential base 2 between two zooms is exact for that.
  */
 function circleRadius(latitude) {
-  const metresPerPixelAtZoom0 = 156543.03392 * Math.cos((latitude * Math.PI) / 180);
+  // MapLibre's world is 512 px wide at zoom 0.
+  const metresPerPixelAtZoom0 = 78271.51696 * Math.cos((latitude * Math.PI) / 180);
   const atZoom = (zoom) => ["max", 12, ["*", ["get", "radius_m"], 2 ** zoom / metresPerPixelAtZoom0]];
   return ["interpolate", ["exponential", 2], ["zoom"], 8, atZoom(8), 16, atZoom(16)];
 }
@@ -210,6 +220,7 @@ function themedPaint(theme) {
     background: { "background-color": SURFACES[theme] },
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
+    "staze-ukljucene": { "line-color": DANGER[theme] },
     "segmenti-casing": { "line-color": CASING[theme] },
     "segmenti-raspon": { "line-color": DANGER[theme] },
     "segmenti-sporna": { "line-color": ink(theme) },
@@ -229,7 +240,12 @@ function themedPaint(theme) {
 function dataLayers(theme, latitude) {
   const colors = themedPaint(theme);
   const bands = bandFilters(state.band);
-  const layers = [];
+  const layers = [
+    // A light red halo under the Staze the red segments were measured from.
+    { id: "staze-ukljucene", type: "line", source: "staze", filter: includedFilter(state.included),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colors["staze-ukljucene"], "line-width": roadScaled(13), "line-opacity": 0.35 } },
+  ];
   for (const category of CATEGORIES) {
     const style = CATEGORY_STYLE[category];
     const filter = ["==", ["get", "kategorija"], category];
@@ -301,6 +317,7 @@ const LAYER_GROUPS = [
   { id: "cesta", label: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
   { id: "staza", label: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
+  { id: "ukljucene", label: "Ceste uključene u izračun (crveni obrub)", layers: ["staze-ukljucene"] },
   { id: "granica", label: "Granična linija", layers: ["granica-casing", "granica"] },
   {
     id: "segmenti", label: "Segmenti granice u rasponu i stanja",
@@ -565,7 +582,7 @@ function renderLegend() {
   hatchBox.append(hatch);
   legend.append(
     legendGroup(
-      "Segmenti granice: zračna udaljenost najbližeg para Staza HR–BiH",
+      "Segmenti granice: zračna udaljenost najbližeg para cesta HR–BiH",
       legendRow(
         sample((svg) => {
           sampleLine(svg, CASING[theme], 9);
@@ -574,7 +591,17 @@ function renderLegend() {
         `Najbliži par od ${bandText(state.band)}`,
         "Odabrani raspon. Ostali procijenjeni segmenti nisu obojeni.",
       ),
-      legendRow(hatchBox, "Nedovoljno podataka", "S barem jedne Strane nema mapiranih Staza. To nije nizak rizik."),
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, DANGER[theme], 13, { opacity: 0.35 });
+          const { fill, casing } = ROAD_STYLES[theme].cesta;
+          sampleLine(svg, casing, 6.9);
+          sampleLine(svg, fill, 4.2);
+        }),
+        "Cesta uključena u izračun",
+        "Cesta iz najbližeg para crvenog segmenta. Prijeđite mišem preko nje za udaljenost od granice.",
+      ),
+      legendRow(hatchBox, "Nedovoljno podataka", "S barem jedne Strane nema mapiranih cesta. To nije nizak rizik."),
       legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak", "Staza presijeca granicu izvan Službenog prijelaza (najviši rizik)."),
       legendRow(imageElement(sluzbeniPrijelazCanvas(), ""), "Službeni prijelaz", "Susjedni segmenti izuzeti su iz procjene."),
       legendRow(sample((svg) => sampleLine(svg, ink(theme), 2.4, { dash: "5 4" })), "Sporna granica", "Rizik se ne računa."),
@@ -604,7 +631,7 @@ function renderLegend() {
       ),
     ),
   );
-  const note = element("p", "Raspon gleda samo udaljenost: segment s vodotokom između para Staza (oznaka „rijeka” u opisu segmenta) također je crven ako je u rasponu.", "legend-title");
+  const note = element("p", "U izračun ulaze samo ceste; makadami, šumski putovi i staze prikazani su, ali se ne računaju. Raspon gleda samo udaljenost: segment s vodotokom između para cesta (oznaka „rijeka” u opisu segmenta) također je crven ako je u rasponu.", "legend-title");
   legend.append(note);
 }
 
@@ -629,6 +656,8 @@ function recomputeAreas(moved) {
   state.band = readBand(moved);
   $("band-value").textContent = bandText(state.band);
   for (const [layerId, filter] of Object.entries(bandFilters(state.band))) state.map.setFilter(layerId, filter);
+  state.included = includedStaze(state.segments, state.band);
+  state.map.setFilter("staze-ukljucene", includedFilter(state.included));
   state.areas = kriticnaPodrucja(state.segments, state.band);
   state.selectedArea = null;
   renderLegend();
@@ -765,9 +794,11 @@ function segmentPopup(p) {
   const list = element("dl");
   const rows = [
     ["Rizik prelaska", `${number(2).format(p.rizik)} (od 0 do 1)`],
-    ["Najbliži par Staza", `${number(0).format(p.udaljenost_m)} m`],
-    ["HR Staza", stazaDescription(p, "hr")],
-    ["BiH Staza", stazaDescription(p, "bih")],
+    ["Najbliži par cesta", `${number(0).format(p.udaljenost_m)} m`],
+    ["HR cesta", stazaDescription(p, "hr")],
+    ["HR cesta od granice", metres(p.hr_od_granice_m)],
+    ["BiH cesta", stazaDescription(p, "bih")],
+    ["BiH cesta od granice", metres(p.bih_od_granice_m)],
     ["Duljina segmenta", `${number(0).format(p.duljina_m)} m`],
   ];
   for (const [term, value] of rows) list.append(element("dt", term), element("dd", value));
@@ -775,6 +806,35 @@ function segmentPopup(p) {
   if (p.izravni_prelazak) root.append(element("span", "Izravni prelazak", "flag"));
   if (p.rijeka) root.append(element("span", "rijeka (rizik spušten za jedan stupanj)", "flag"));
   return root;
+}
+
+/** "Od granice udaljena …" for a Staza of a nearest pair; a range when it serves several segments. */
+function borderDistanceText(distances) {
+  const low = Math.min(...distances);
+  const high = Math.max(...distances);
+  return Math.round(low) === Math.round(high)
+    ? `Od granice udaljena ${metres(low)}`
+    : `Od granice udaljena ${number(0).format(low)}–${metres(high)}`;
+}
+
+/** A tooltip on the Staze of the nearest pairs: how far from the border the pair was measured. */
+function setupIncludedHover() {
+  const { map } = state;
+  const tooltip = new globalThis.maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "280px" });
+  map.on("mousemove", "staze-ukljucene", (event) => {
+    const p = event.features[0].properties;
+    const distances = state.included[p.strana]?.get(p.id);
+    if (!distances) return;
+    const root = element("div", undefined, "popup");
+    root.append(element("strong", borderDistanceText(distances)));
+    const name = p.naziv || "cesta bez naziva";
+    const n = distances.length;
+    const few = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14);
+    const segments = `${n} ${n % 10 === 1 && n % 100 !== 11 ? "crveni segment" : few ? "crvena segmenta" : "crvenih segmenata"}`;
+    root.append(element("p", `${name} · ${p.strana} · najbliža cesta za ${segments}`));
+    tooltip.setLngLat(event.lngLat).setDOMContent(root).addTo(map);
+  });
+  map.on("mouseleave", "staze-ukljucene", () => tooltip.remove());
 }
 
 function setupClicks() {
@@ -904,6 +964,7 @@ async function start() {
     setupBasemapChoice();
     showBasemap(state.basemap);
     setupClicks();
+    setupIncludedHover();
     setupExport();
     recomputeAreas();
   });

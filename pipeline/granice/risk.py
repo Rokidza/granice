@@ -73,6 +73,9 @@ class SegmentGranice:
     bih_way_id: int | None = None
     hr_category: str | None = None
     bih_category: str | None = None
+    # How far from the border line the two ends of the nearest pair lie.
+    hr_border_distance_m: float | None = None
+    bih_border_distance_m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +95,7 @@ class _SpatialIndexes:
     hr: _SideIndex
     bih: _SideIndex
     water: STRtree
+    border: BaseGeometry
 
 
 @dataclass(frozen=True)
@@ -126,6 +130,7 @@ def assess_crossing_risk(data: RiskInput, params: Params) -> Assessment:
         _SideIndex([s for s in data.staze if s.strana == Strana.HR]),
         _SideIndex([s for s in data.staze if s.strana == Strana.BIH]),
         STRtree(data.water),
+        shapely.union_all(data.border),
     )
     segments: list[SegmentGranice] = []
     for chain_no, chain in enumerate(data.border):
@@ -238,8 +243,9 @@ def _assess_segment(
     if len(indexes.water.query(link, predicate="intersects")) > 0:
         risk = max(0.0, risk - params.river_penalty)
         flags = ("rijeka",)
-    near_hr = _nearest(Point(link.coords[0]), hr_clips)
-    near_bih = _nearest(Point(link.coords[-1]), bih_clips)
+    hr_end, bih_end = Point(link.coords[0]), Point(link.coords[-1])
+    near_hr = _nearest(hr_end, hr_clips)
+    near_bih = _nearest(bih_end, bih_clips)
     return SegmentGranice(
         chain,
         order,
@@ -252,6 +258,8 @@ def _assess_segment(
         near_bih.way_id,
         near_hr.category,
         near_bih.category,
+        hr_end.distance(indexes.border),
+        bih_end.distance(indexes.border),
     )
 
 

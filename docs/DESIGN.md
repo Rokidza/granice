@@ -140,3 +140,14 @@ Proširenje pilota na cijelu granicu HR–BiH (oko 1000 km). Izračun, ugovor iz
 - **Rijeka:** Sava je granica na stotinjak kilometara, pa će većina tih segmenata dobiti oznaku „rijeka" i spušten rizik. To je namjerno, ali rezultat za Savu treba tumačiti uz to.
 - **Nepromijenjeno:** nema podataka o minama, a banner je sada relevantan za cijelu granicu (minski sumnjiva područja ima i u Baniji, Lici, zaleđu Zadra i Dubrovnika).
 
+## Izmjene prikaza (raspon udaljenosti)
+
+Planeri ne smatraju Staze na 0 m (npr. cesta koja prelazi granicu) nužno najrizičnijima, nego žele sami odabrati raspon udaljenosti. Zamjenjuje boju iz odjeljka „Prikaz” i Q10 na karti; izračun i ugovor izlaza nisu promijenjeni.
+
+- **Raspon umjesto praga:** u bočnoj traci biraju se dvije granice, „od” i „do” (zadano 1000–1200 m, `web/config.js`), za zračnu udaljenost najbližeg para Staza. Klizači sežu do najveće udaljenosti u podacima (zaokruženo na 500 m).
+- **Bez skale boja:** segment u rasponu je crven (ista crvena kao krugovi), ostali procijenjeni segmenti nisu obojeni (vidi se samo granična linija, a klik i dalje otvara opis). Nedovoljno podataka, Službeni prijelaz i sporna granica prikazuju se kao i prije.
+- **Rijeka:** raspon gleda samo udaljenost, pa je segment s vodotokom između para crven ako je u rasponu. Oznaka „rijeka” ostaje u opisu segmenta.
+- **Kritična područja:** nizovi susjednih segmenata u rasponu, zaokruženi i numerirani kao i prije, poredani po duljini pa po najbližem paru. Izvoz CSV/GeoJSON umjesto `vrh_rizika` ima `najveca_udaljenost_m`. Datoteka `kriticna_podrucja.geojson` iz izračuna i dalje koristi prag indeksa.
+- **Krugovi:** polumjer kruga na karti računao se za pločice od 256 px, pa je krug bio upola manji od zamišljenog i nije obuhvaćao veća područja, a broj nije stajao na rubu kruga. Ispravljeno za MapLibre (512 px).
+- **Ikone:** Izravni prelazak i Službeni prijelaz crtaju se dvostruko većima (oko 22 px pri pogledu na cijelu granicu, 36 px na razini ulica), oznake rangova su veće.
+- **Crvena u svijetloj temi** je `#c73751` umjesto `#d7263d`: gotovo ista, a uz daltonizam (protanopija, deuteranopija) ostaje odvojena od smeđih makadama i staza. Provjerava `npm run check-colors`.

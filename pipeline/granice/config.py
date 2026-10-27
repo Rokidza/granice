@@ -41,6 +41,9 @@ AREAS = {"cijela": BORDER_BBOX, "pilot": PILOT_BBOX}
 # How far from the border Staze are fetched. Must be at least the risk search radius.
 CORRIDOR_M = 3500
 
+# Categories of Staze that take part in the risk calculation. The others are still drawn on the map.
+RISK_CATEGORIES = ("cesta",)
+
 
 @dataclass(frozen=True)
 class DisputedSection:

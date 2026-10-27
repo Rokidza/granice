@@ -32,6 +32,17 @@ def test_parallel_staze_200_m_apart_give_high_but_not_highest_risk() -> None:
         assert segment.risk_index == pytest.approx(0.744, abs=0.001)
 
 
+def test_nearest_pair_reports_how_far_each_end_lies_from_the_border() -> None:
+    result = assess_crossing_risk(
+        RiskInput(border=[BORDER], staze=[hr(1, 300), bih(2, -800)]), Params()
+    )
+
+    for segment in result.segments:
+        assert segment.nearest_distance_m == pytest.approx(1100)
+        assert segment.hr_border_distance_m == pytest.approx(300)
+        assert segment.bih_border_distance_m == pytest.approx(800)
+
+
 def test_staze_2_km_apart_give_zero_risk() -> None:
     result = assess_crossing_risk(
         RiskInput(border=[BORDER], staze=[hr(1, 1000), bih(2, -1000)]), Params()

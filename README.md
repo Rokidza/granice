@@ -31,7 +31,7 @@ Provjere:
 
 ```sh
 cd pipeline && python -m pytest && python -m mypy granice tests && python -m ruff check .
-cd web && npm run check-colors     # validator boja karte (skala rizika, ceste, krugovi; daltonizam, kontrast, svijetla i tamna tema)
+cd web && npm run check-colors     # validator boja karte (crveni raspon, ceste, krugovi; daltonizam, kontrast, svijetla i tamna tema)
 ```
 
 ### Podloge karte
