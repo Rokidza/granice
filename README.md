@@ -48,18 +48,14 @@ pmtiles extract https://build.protomaps.com/<datum>.pmtiles data/basemap.pmtiles
 
 ## Objava na Netlifyju (javni URL)
 
-Stranica je statična, pa se objavljuje povlačenjem mape. Izračunati slojevi (`data/`) nisu u gitu, zato se mapa za objavu sastavlja lokalno:
+Netlify je spojen s GitHub repozitorijem i stranicu slaže sam nakon svakog pusha na `main` (naredba i mapa su u `netlify.toml`). Izračun se na Netlifyju ne pokreće: izračunati slojevi (`data/out/`) su u gitu, pa se nova verzija podataka objavljuje ovako:
 
 ```sh
 python -m granice compute          # ili refresh, ako treba svježi OSM
-cd web
-npm install                        # jednom
-npm run vendor && npm run build    # slaže web/dist/
+git add data/out && git commit -m "Osvježi izračunate slojeve" && git push
 ```
 
-Zatim otvorite https://app.netlify.com/drop (prijava je besplatna) i povucite mapu **`web/dist`** na stranicu. Netlify odmah vraća javni URL (`https://<naziv>.netlify.app`, naziv se može promijeniti u postavkama siteta). Za novu verziju ponovno pokrenite `npm run build` i povucite mapu na karticu Deploys tog siteta.
-
-`web/dist/` je potpuno samostalna: stranica, `vendor/`, pet slojeva u `data/` i `_headers` (`noindex`, bez cachea za podatke). Alternativa je Netlify CLI: `netlify deploy --prod --dir=web/dist` (`netlify.toml` u korijenu postavlja `publish`).
+Netlify zatim pokrene `npm ci && npm run vendor && npm run build` u `web/` i objavi `web/dist/`: stranicu, `vendor/`, pet slojeva u `data/` i `_headers` (`noindex`, bez cachea za podatke). Isto se može provjeriti lokalno: `cd web && npm install && npm run vendor && npm run build`.
 
 Što to znači (ADR 0003): svatko s URL-om vidi kartu rizika. Izračunati slojevi su OSM izvedena baza, pa se objavljuju pod ODbL-om; stranica uz atribuciju nudi njihovo preuzimanje. Podloge (ADR 0002) dolaze s vanjskih servisa, a uvjete Esri i OpenTopoMap za javnu stranicu treba provjeriti; ako ne odgovaraju, uklonite unose `satelit` i `reljef` iz `web/config.js` prije `npm run build`.
 

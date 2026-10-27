@@ -1,7 +1,6 @@
 // Assembles the folder that is deployed to Netlify (web/dist/): the static page, the vendored
-// libraries and the layers computed by the pipeline, side by side. The layers are not in git
-// (data/ is ignored), so this runs on a machine that has them. Usage: npm run build
-// The folder is self-contained: drag it onto https://app.netlify.com/drop.
+// libraries and the layers computed by the pipeline, side by side. The layers (data/out/) are
+// committed, so Netlify runs this on every push (netlify.toml). Usage: npm run build
 //
 // Needs `python -m granice refresh|compute` (data/out/) and `npm run vendor` (web/vendor/) first.
 
@@ -57,4 +56,4 @@ writeFileSync(
   ].join("\n"),
 );
 
-console.log(`web/dist ready (${DATA_FILES.length} data files). Drop the folder on https://app.netlify.com/drop`);
+console.log(`web/dist ready (${DATA_FILES.length} data files).`);

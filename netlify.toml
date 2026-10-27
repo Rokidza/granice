@@ -1,10 +1,13 @@
-# Normally the folder is dragged onto https://app.netlify.com/drop (README.md, "Objava na Netlifyju").
-# This file is for the CLI route: cd web && npm run vendor && npm run build, then
-#   netlify deploy --prod --dir=web/dist
-# The same headers are also written to web/dist/_headers by the build, which is what drag and drop uses.
+# Netlify builds the site from GitHub on every push (README.md, "Objava na Netlifyju"). The layers
+# come from data/out/, which is committed; the pipeline itself does not run on Netlify.
+# The same headers are also written to web/dist/_headers by the build.
 
 [build]
+  command = "cd web && npm ci && npm run vendor && npm run build"
   publish = "web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
 
 [[headers]]
   for = "/*"

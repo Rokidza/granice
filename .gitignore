@@ -1,5 +1,7 @@
-# Generirani i sirovi podaci (OSM, GeoJSON, PMTiles)
-data/
+# Sirovi podaci (OSM, PMTiles, fontovi). Izračunati slojevi (data/out/) su u gitu, iz njih
+# Netlify slaže stranicu.
+data/*
+!data/out/
 
 # Python
 __pycache__/
