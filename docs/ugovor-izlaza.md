@@ -8,12 +8,13 @@ Promjena oblika podataka podiže `schema` u `meta.json`.
 
 | ključ | značenje |
 |---|---|
-| `schema` | verzija ugovora (trenutno 5) |
+| `schema` | verzija ugovora (trenutno 6) |
 | `osm_podaci_od` | vrijeme OSM podataka (ISO 8601), prikazuje se kao „OSM podaci od: …" |
 | `generirano` | vrijeme izračuna |
 | `podrucje` | `cijela` (cijela granica HR–BiH) \| `pilot` (samo Pilot odsječak) |
 | `podrucje_bbox` | `south, west, north, east` izračunatog područja |
 | `parametri` | svi parametri izračuna (vidi tablicu ispod); web iz njih računa indeks i Kritična područja |
+| `pojasevi_m` | vrijednosti `max_border_distance_m` za koje postoji datoteka u `pojasevi/` (50 do 2000 m u koracima od 50 m, plus zadana) |
 | `kategorije_izracuna` | kategorije Staza koje ulaze u izračun (trenutno samo `cesta`); ostale se samo prikazuju |
 | `sporne_zone` | nazivi područja označenih kao sporna granica |
 | `broj_segmenata_po_stanju` | brojač po `stanje` |
@@ -30,7 +31,7 @@ Promjena oblika podataka podiže `schema` u `meta.json`.
 | `river_penalty` | 0,25 | koliko se indeks spušta kad rijeka leži između najbližeg para („jedan stupanj") |
 | `sluzbeni_prijelaz_radius_m` | 500 | segmenti bliže od toga Službenom prijelazu izuzeti su iz procjene |
 | `search_radius_m` | 3000 | koliko daleko od segmenta Staza još vrijedi kao „mapirana" |
-| `max_border_distance_m` | 500 | u izračun ulazi samo dio Staze do te udaljenosti od granične linije; ostatak se odreže, pa nijedan kraj najbližeg para nije dalje od granice |
+| `max_border_distance_m` | 500 | u izračun ulazi samo dio Staze do te udaljenosti od granične linije; ostatak se odreže, pa nijedan kraj najbližeg para nije dalje od granice. Ovo je zadana vrijednost (`segmenti.geojson`); za ostale vidi `pojasevi/` |
 
 Udaljenost najbližeg para je točna najmanja udaljenost između HR i BiH Staza (GEOS): STR-stablo odsječaka BiH Staza, najprije test presijecanja (udaljenost 0), zatim za svaki HR odsječak pretraga najbližeg uz odbacivanje dalekih čvorova (branch and bound). Spojnica para prelazi granicu, pa je `udaljenost_m` uvijek barem `hr_od_granice_m + bih_od_granice_m`.
 
@@ -40,7 +41,7 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 
 `LineString`, jedan dio po Strani (Staza koja prelazi granicu dolazi kao dva dijela s istim `id`).
 
-`id` (OSM way), `strana` (`HR` | `BiH`), `kategorija` (`cesta` | `makadam` | `staza`), `naziv`, `highway`, `izvan_pojasa` (dio dalje od `max_border_distance_m` od granice: ne ulazi u izračun, na karti je zamagljen). Staza koja izlazi iz pojasa dolazi kao više dijelova s istim `id`.
+`id` (OSM way), `strana` (`HR` | `BiH`), `kategorija` (`cesta` | `makadam` | `staza`), `naziv`, `highway`.
 
 ## `granica.geojson`
 
@@ -62,6 +63,17 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 | `izravni_prelazak` | Staza presijeca granicu izvan Službenog prijelaza (`rizik` je 1) |
 | `hr_staza_id`, `hr_staza_naziv`, `hr_staza_kategorija` | najbliža Staza HR Strane (isto `bih_…`) |
 | `hr_od_granice_m`, `bih_od_granice_m` | koliko je kraj najbližeg para na toj Strani udaljen od granične linije; `null` osim za `procijenjen` |
+
+## `pojasevi/<m>.json`
+
+Jedna datoteka po vrijednosti iz `meta.json` → `pojasevi_m` (npr. `pojasevi/750.json`). Planer na stranici upiše koliko daleko od granice ceste ulaze u izračun, a stranica učita najbližu izračunatu vrijednost.
+
+| ključ | značenje |
+|---|---|
+| `max_border_distance_m` | vrijednost za koju je datoteka izračunata |
+| `broj_segmenata_po_stanju` | brojač po `stanje` |
+| `segmenti` | po jedan objekt za svaki segment, istim redom kao u `segmenti.geojson`: ista svojstva osim `lanac`, `red`, `duljina_m` (ne ovise o vrijednosti), a svojstva s `null` ili `false` su izostavljena |
+| `magla` | GeoJSON geometrija područja dalje od te udaljenosti od granice (pojednostavljena na 10 m); stranica preko nje crta maglu |
 
 ## `rijecna_granica.geojson`
 

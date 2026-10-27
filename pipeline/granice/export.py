@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections import Counter
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import shapely
 from pyproj import Transformer
-from shapely.geometry import LineString, MultiLineString, mapping
+from shapely.geometry import MultiLineString, box, mapping
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, transform
 
@@ -26,8 +26,14 @@ from granice.risk import (
 )
 from granice.river_border import RiverStretch
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 COORD_DECIMALS = 5  # about 1 m
+
+CHOICES_DIR = "pojasevi"  # one file per precomputed max_border_distance_m
+FOG_MARGIN_M = 100_000  # how far around the border the fog outside the corridor reaches
+FOG_SIMPLIFY_M = 10.0  # the fog is only drawn, so its edge may be this much off
+# Properties of a segment that do not depend on max_border_distance_m (kept in segmenti.geojson).
+_FIXED_SEGMENT_KEYS = ("lanac", "red", "duljina_m")
 
 
 def segment_id(chain: int, order: int) -> str:
@@ -43,13 +49,14 @@ def write_layers(
     area: BBox,
     disputed: list[DisputedSection],
     river_stretches: list[RiverStretch],
+    corridor_choices: list[float],
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     to_wgs84 = prepared.to_wgs84
     risk_input = prepared.risk_input
 
     layers = {
-        "staze": _staze(prepared, to_wgs84, params),
+        "staze": _staze(prepared, to_wgs84),
         "granica": _collection(
             _feature(to_wgs84, c, {"lanac": i}) for i, c in enumerate(risk_input.border)
         ),
@@ -79,6 +86,7 @@ def write_layers(
             "podrucje_bbox": asdict(area),
             "parametri": asdict(params),
             "kategorije_izracuna": list(RISK_CATEGORIES),
+            "pojasevi_m": corridor_choices,
             "sporne_zone": [d.name for d in disputed],
             "broj_segmenata_po_stanju": dict(Counter(s.state for s in assessment.segments)),
             "atribucija": "© OpenStreetMap contributors",
@@ -86,43 +94,70 @@ def write_layers(
     )
 
 
-def _staze(prepared: Prepared, to_wgs84: Transformer, params: Params) -> dict[str, Any]:
-    """Every Staza, split where it leaves the corridor of `max_border_distance_m` around the border:
-    the part outside (`izvan_pojasa`) takes no part in the calculation and is drawn faded."""
-    corridor = border_corridor(prepared.risk_input.border, params.max_border_distance_m)
-    shapely.prepare(corridor)
+def write_corridor_choices(
+    out_dir: Path, prepared: Prepared, assessments: dict[float, Assessment]
+) -> None:
+    """One file per precomputed max_border_distance_m: the segment properties that depend on it,
+    in the order of segmenti.geojson (null and false left out), and the fog outside the corridor."""
+    choices_dir = out_dir / CHOICES_DIR
+    shutil.rmtree(choices_dir, ignore_errors=True)  # no files left over from other choices
+    choices_dir.mkdir(parents=True)
+    for distance_m, assessment in assessments.items():
+        rows = []
+        for segment in assessment.segments:
+            properties = _segment_properties(prepared, segment)
+            rows.append(
+                {
+                    k: v
+                    for k, v in properties.items()
+                    if k not in _FIXED_SEGMENT_KEYS and v is not None and v is not False
+                }
+            )
+        _write_json(
+            choices_dir / f"{distance_m:g}.json",
+            {
+                "max_border_distance_m": distance_m,
+                "broj_segmenata_po_stanju": dict(Counter(s.state for s in assessment.segments)),
+                "segmenti": rows,
+                "magla": _fog(prepared, distance_m),
+            },
+        )
+
+
+def _fog(prepared: Prepared, distance_m: float) -> dict[str, Any]:
+    """The area around the border farther than `distance_m` from it, as a GeoJSON geometry."""
+    corridor = border_corridor(prepared.risk_input.border, distance_m)
+    surroundings = box(*corridor.bounds).buffer(FOG_MARGIN_M, join_style="mitre")
+    fog = surroundings.difference(corridor).simplify(FOG_SIMPLIFY_M)
+    result: dict[str, Any] = _rounded(mapping(transform(prepared.to_wgs84.transform, fog)))
+    return result
+
+
+def _staze(prepared: Prepared, to_wgs84: Transformer) -> dict[str, Any]:
     features = []
     for staza in prepared.risk_input.staze:
         tags = prepared.way_tags.get(staza.way_id, {})
-        properties = {
-            "id": staza.way_id,
-            "strana": staza.strana.value,
-            "kategorija": staza.category,
-            "naziv": tags.get("name"),
-            "highway": tags.get("highway"),
-        }
-        if corridor.covers(staza.geometry):
-            pieces = [(staza.geometry, False)]
-        elif not corridor.intersects(staza.geometry):
-            pieces = [(staza.geometry, True)]
-        else:
-            pieces = [
-                (part, outside)
-                for outside, geometry in (
-                    (False, staza.geometry.intersection(corridor)),
-                    (True, staza.geometry.difference(corridor)),
-                )
-                for part in shapely.get_parts(geometry)
-                if isinstance(part, LineString) and part.length > 0
-            ]
-        features += [
-            _feature(to_wgs84, part, {**properties, "izvan_pojasa": outside})
-            for part, outside in pieces
-        ]
+        features.append(
+            _feature(
+                to_wgs84,
+                staza.geometry,
+                {
+                    "id": staza.way_id,
+                    "strana": staza.strana.value,
+                    "kategorija": staza.category,
+                    "naziv": tags.get("name"),
+                    "highway": tags.get("highway"),
+                },
+            )
+        )
     return _collection(features)
 
 
 def _segment(prepared: Prepared, segment: SegmentGranice) -> dict[str, Any]:
+    return _feature(prepared.to_wgs84, segment.geometry, _segment_properties(prepared, segment))
+
+
+def _segment_properties(prepared: Prepared, segment: SegmentGranice) -> dict[str, Any]:
     tags = prepared.way_tags
     properties: dict[str, Any] = {
         "id": segment_id(segment.chain, segment.order),
@@ -143,7 +178,7 @@ def _segment(prepared: Prepared, segment: SegmentGranice) -> dict[str, Any]:
         properties[f"{prefix}_staza_naziv"] = tags.get(way_id or -1, {}).get("name")
         properties[f"{prefix}_staza_kategorija"] = category
         properties[f"{prefix}_od_granice_m"] = _round(border_distance, 1)
-    return _feature(prepared.to_wgs84, segment.geometry, properties)
+    return properties
 
 
 def _prijelazi(prepared: Prepared, assessment: Assessment) -> dict[str, Any]:

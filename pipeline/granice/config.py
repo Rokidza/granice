@@ -44,6 +44,10 @@ CORRIDOR_M = 3500
 # Categories of Staze that take part in the risk calculation. The others are still drawn on the map.
 RISK_CATEGORIES = ("cesta",)
 
+# Values of max_border_distance_m computed in advance: on the web page the planner types in how far
+# from the border roads count, and the page loads the nearest of these.
+CORRIDOR_CHOICES_M = tuple(float(d) for d in range(50, 2001, 50))
+
 
 @dataclass(frozen=True)
 class DisputedSection:

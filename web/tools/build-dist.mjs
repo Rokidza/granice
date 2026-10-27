@@ -22,6 +22,7 @@ const DATA_FILES = [
 const missing = [
   ...VENDOR_FILES.map((f) => join(web, "vendor", f)),
   ...DATA_FILES.map((f) => join(dataOut, f)),
+  join(dataOut, "pojasevi"), // one file per corridor the planner can type in
 ].filter((path) => !existsSync(path));
 if (missing.length) {
   console.error("Missing inputs, run `python -m granice compute` and `npm run vendor` first:");
@@ -37,6 +38,7 @@ mkdirSync(join(out, "data"), { recursive: true });
 for (const file of PAGE_FILES) cpSync(join(web, file), join(out, file));
 for (const file of VENDOR_FILES) cpSync(join(web, "vendor", file), join(out, "vendor", file));
 for (const file of DATA_FILES) cpSync(join(dataOut, file), join(out, "data", file));
+cpSync(join(dataOut, "pojasevi"), join(out, "data", "pojasevi"), { recursive: true });
 
 // In the repo the page sits next to ../data/; in dist/ the data sits inside it.
 const config = readFileSync(join(web, "config.js"), "utf8");

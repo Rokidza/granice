@@ -12,6 +12,7 @@ from dataclasses import fields, replace
 
 from granice.config import (
     AREAS,
+    CORRIDOR_CHOICES_M,
     CORRIDOR_M,
     DATA_DIR,
     DISPUTED_SECTIONS,
@@ -21,7 +22,7 @@ from granice.config import (
     RISK_CATEGORIES,
     BBox,
 )
-from granice.export import write_layers
+from granice.export import write_corridor_choices, write_layers
 from granice.geofabrik import GeofabrikSource
 from granice.osm import OsmSource, OverpassSource
 from granice.prepare import prepare
@@ -65,12 +66,29 @@ def run(source: OsmSource, area: BBox, params: Params) -> None:
         len(risk_input.staze),
         RISK_CATEGORIES,
     )
-    assessment = assess_crossing_risk(risk_input, params)
+    # The page lets the planner pick max_border_distance_m, so the assessment runs for every choice.
+    choices = sorted({*CORRIDOR_CHOICES_M, params.max_border_distance_m})
+    assessments = {}
+    for distance_m in choices:
+        assessments[distance_m] = assess_crossing_risk(
+            risk_input, replace(params, max_border_distance_m=distance_m)
+        )
+        log.info("roads up to %.0f m from the border: assessed", distance_m)
+    assessment = assessments[params.max_border_distance_m]
     rivers = river_border(prepared.risk_input.border, prepared.risk_input.water)
     log.info("%.0f km of Riječna granica", sum(r.geometry.length for r in rivers) / 1000)
     write_layers(
-        OUT_DIR, prepared, assessment, params, data.timestamp, area, DISPUTED_SECTIONS, rivers
+        OUT_DIR,
+        prepared,
+        assessment,
+        params,
+        data.timestamp,
+        area,
+        DISPUTED_SECTIONS,
+        rivers,
+        choices,
     )
+    write_corridor_choices(OUT_DIR, prepared, assessments)
     log.info(
         "%d segments, %d Kritična područja written to %s",
         len(assessment.segments),

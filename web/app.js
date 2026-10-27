@@ -57,6 +57,9 @@ const state = {
   map: null,
   meta: null,
   segments: [],
+  corridorM: null, // roads up to this far from the border count (max_border_distance_m)
+  corridorFiles: new Map(), // pojasevi/<m>.json requests by value
+  corridorRequest: 0, // bumped per choice, so a slow file cannot land after a newer choice
   areas: [],
   selectedArea: null,
   band: { ...CONFIG.band }, // nearest-pair distances (m) drawn red and grouped into Kritična područja
@@ -196,17 +199,14 @@ function bandFilters({ minM, maxM }) {
   };
 }
 
-// Parts of Staze farther from the border than max_border_distance_m take no part in the
-// calculation (property izvan_pojasa, docs/ugovor-izlaza.md) and are drawn faded.
-const OUTSIDE_CORRIDOR = ["coalesce", ["get", "izvan_pojasa"], false];
-const FADED_OPACITY = 0.25;
-const corridorText = () => metres(state.meta.parametri.max_border_distance_m);
+// Fog over everything farther from the border than the corridor: roads there take no part.
+const FOG_OPACITY = 0.6;
 
-/** Filter of the halo under the Staze of the nearest pairs within the band (their parts in the corridor). */
+/** Filter of the halo under the Staze of the nearest pairs within the band. */
 function includedFilter(included) {
-  return ["all", ["!", OUTSIDE_CORRIDOR], ["any", ...Object.entries(included).map(([strana, ids]) => [
+  return ["any", ...Object.entries(included).map(([strana, ids]) => [
     "all", ["==", ["get", "strana"], strana], ["in", ["get", "id"], ["literal", [...ids.keys()]]],
-  ])]];
+  ])];
 }
 
 /**
@@ -231,6 +231,7 @@ function themedPaint(theme) {
     "segmenti-casing": { "line-color": CASING[theme] },
     "segmenti-raspon": { "line-color": DANGER[theme] },
     "rijecna-granica": { "line-color": RIVER[theme] },
+    "pojas-magla": { "fill-color": SURFACES[theme] },
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
     "segmenti-odabir": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
@@ -264,7 +265,7 @@ function dataLayers(theme, latitude) {
         paint: {
           ...colors[`staze-${category}-casing`],
           "line-width": roadScaled(style.width + style.casing),
-          "line-opacity": ["case", OUTSIDE_CORRIDOR, style.casingOpacity * FADED_OPACITY, style.casingOpacity],
+          "line-opacity": style.casingOpacity,
         },
       },
       {
@@ -273,13 +274,14 @@ function dataLayers(theme, latitude) {
         paint: {
           ...colors[`staze-${category}`],
           "line-width": roadScaled(style.width),
-          "line-opacity": ["case", OUTSIDE_CORRIDOR, FADED_OPACITY, 1],
           ...(style.dash ? { "line-dasharray": style.dash } : {}),
         },
       },
     );
   }
   layers.push(
+    { id: "pojas-magla", type: "fill", source: "magla",
+      paint: { ...colors["pojas-magla"], "fill-opacity": FOG_OPACITY } },
     // Riječna granica: a wide blue band under the segments, so a red segment on a river keeps its
     // red and is edged in blue.
     { id: "rijecna-granica", type: "line", source: "rijecna_granica",
@@ -334,6 +336,7 @@ const LAYER_GROUPS = [
   { id: "ukljucene", label: "Ceste uključene u izračun (crveni obrub)", layers: ["staze-ukljucene"] },
   { id: "granica", label: "Granična linija", layers: ["granica-casing", "granica"] },
   { id: "rijeka", label: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
+  { id: "magla", label: "Magla izvan pojasa cesta", layers: ["pojas-magla"] },
   {
     id: "segmenti", label: "Segmenti granice u rasponu i stanja",
     layers: [
@@ -649,11 +652,12 @@ function renderLegend() {
       legendRow(
         sample((svg) => {
           const { fill, casing } = ROAD_STYLES[theme].cesta;
-          sampleLine(svg, casing, 6.9, { opacity: FADED_OPACITY });
-          sampleLine(svg, fill, 4.2, { opacity: FADED_OPACITY });
+          sampleLine(svg, casing, 6.9);
+          sampleLine(svg, fill, 4.2);
+          svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: SURFACES[theme], "fill-opacity": FOG_OPACITY }));
         }),
         `Dalje od ${corridorText()} od granice (zamagljeno)`,
-        "Taj dio ceste ne ulazi u izračun. Granica pojasa je parametar izračuna (--max-border-distance-m).",
+        "Taj dio ceste ne ulazi u izračun. Udaljenost se mijenja poljem „Ceste do … m od granice”.",
       ),
       legendRow(
         sample((svg) => {
@@ -664,7 +668,7 @@ function renderLegend() {
       ),
     ),
   );
-  const note = element("p", `U izračun ulaze samo dijelovi cesta do ${corridorText()} od granice; makadami, šumski putovi i staze prikazani su, ali se ne računaju. Udaljenost para je najmanje zbroj udaljenosti obiju cesta od granice, pa raspon iznad ${metres(2 * state.meta.parametri.max_border_distance_m)} hvata samo parove razmaknute uzduž granice. Raspon gleda samo udaljenost: segment s vodotokom između para cesta (oznaka „rijeka” u opisu segmenta) također je crven ako je u rasponu.`, "legend-title");
+  const note = element("p", `U izračun ulaze samo dijelovi cesta do ${corridorText()} od granice; makadami, šumski putovi i staze prikazani su, ali se ne računaju. Udaljenost para je najmanje zbroj udaljenosti obiju cesta od granice, pa raspon iznad ${metres(2 * state.corridorM)} hvata samo parove razmaknute uzduž granice. Raspon gleda samo udaljenost: segment s vodotokom između para cesta (oznaka „rijeka” u opisu segmenta) također je crven ako je u rasponu.`, "legend-title");
   legend.append(note);
 }
 
@@ -683,6 +687,97 @@ function readBand(moved) {
     else min.value = max.value;
   }
   return { minM: Number(min.value), maxM: Number(max.value) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Corridor: how far from the border roads count (max_border_distance_m). The pipeline computes
+// the segments for a list of values (meta.pojasevi_m, docs/ugovor-izlaza.md); the planner types
+// one in and the page loads the nearest of them.
+
+const corridorText = () => metres(state.corridorM);
+const fogData = (choice) => ({ type: "Feature", geometry: choice.magla, properties: {} });
+
+const nearestChoice = (value) =>
+  state.meta.pojasevi_m.reduce((best, d) => (Math.abs(d - value) < Math.abs(best - value) ? d : best));
+
+function loadCorridor(distanceM) {
+  if (!state.corridorFiles.has(distanceM)) {
+    const request = loadJson(`pojasevi/${distanceM}.json`);
+    request.catch(() => state.corridorFiles.delete(distanceM)); // a failed file is fetched again next time
+    state.corridorFiles.set(distanceM, request);
+  }
+  return state.corridorFiles.get(distanceM);
+}
+
+/** Puts the results for one corridor on the map: segment properties, fog, legend, Kritična područja. */
+function applyCorridor(choice) {
+  const rows = new Map(choice.segmenti.map((row) => [row.id, row]));
+  state.segments = state.segments.map((feature) => {
+    const { id, lanac, red, duljina_m } = feature.properties;
+    return { ...feature, properties: { ...rows.get(id), id, lanac, red, duljina_m } };
+  });
+  state.corridorM = choice.max_border_distance_m;
+  state.map.getSource("segmenti").setData({ type: "FeatureCollection", features: state.segments });
+  state.map.getSource("magla").setData(fogData(choice));
+  $("corridor-tag").textContent = `ceste do ${corridorText()} od granice`;
+  setBandLimits();
+  recomputeAreas();
+}
+
+/** Loads and shows the corridor nearest to a typed value. `final` (Enter, leaving the field) also
+ * puts that value in the field; while typing it is left alone. */
+async function chooseCorridor(typed, final) {
+  if (!Number.isFinite(typed) || typed <= 0) return;
+  const choice = nearestChoice(typed);
+  const request = ++state.corridorRequest;
+  const status = $("corridor-status");
+  const note = choice === typed ? "" : `Izračunato je samo za neke vrijednosti: prikazano za najbližu, ${metres(choice)}.`;
+  if (final) $("corridor").value = String(choice);
+  if (choice === state.corridorM) {
+    status.textContent = note;
+    return;
+  }
+  status.textContent = `Učitavam podatke za ${metres(choice)}…`;
+  try {
+    const data = await loadCorridor(choice);
+    if (request !== state.corridorRequest) return;
+    applyCorridor(data);
+    status.textContent = note;
+  } catch (error) {
+    if (request !== state.corridorRequest) return;
+    status.textContent = `Podaci za ${metres(choice)} nisu učitani (${error.message}).`;
+  }
+}
+
+function setupCorridorInput(available) {
+  const input = $("corridor");
+  input.value = String(state.corridorM);
+  const choices = state.meta.pojasevi_m ?? [];
+  if (!available || choices.length < 2) {
+    input.disabled = true;
+    $("corridor-status").textContent = "Druge udaljenosti nisu izračunate (pokrenite python -m granice compute).";
+    return;
+  }
+  input.min = String(choices[0]);
+  input.max = String(choices[choices.length - 1]);
+  input.step = String(choices[1] - choices[0]);
+  let timer = null;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => chooseCorridor(input.valueAsNumber, false), 450);
+  });
+  input.addEventListener("change", () => {
+    clearTimeout(timer);
+    chooseCorridor(input.valueAsNumber, true);
+  });
+}
+
+/** The sliders reach the farthest pair in the data, rounded up to 500 m. */
+function setBandLimits() {
+  const farthest = Math.max(0, ...state.segments.map((s) => s.properties.udaljenost_m ?? 0));
+  for (const id of ["band-min", "band-max"]) {
+    $(id).max = String(Math.max(Math.ceil(farthest / 500) * 500, state.band.maxM));
+  }
 }
 
 function recomputeAreas(moved) {
@@ -948,13 +1043,15 @@ async function start() {
   }
   state.meta = data.meta;
   state.segments = data.segmenti.features;
+  state.corridorM = data.meta.parametri.max_border_distance_m; // segmenti.geojson is computed for it
+  let firstCorridor = null;
+  try {
+    firstCorridor = await loadCorridor(state.corridorM);
+  } catch { /* data from before the corridor choices: no fog, the field is disabled */ }
 
-  // The sliders reach the farthest pair in the data, rounded up to 500 m.
-  const farthest = Math.max(0, ...state.segments.map((s) => s.properties.udaljenost_m ?? 0));
-  for (const [id, value] of [["band-min", state.band.minM], ["band-max", state.band.maxM]]) {
-    $(id).max = String(Math.max(Math.ceil(farthest / 500) * 500, state.band.maxM));
-    $(id).value = String(value);
-  }
+  setBandLimits();
+  $("band-min").value = String(state.band.minM);
+  $("band-max").value = String(state.band.maxM);
   $("top-n").value = String(CONFIG.topN);
   for (const [name, file] of [["segmenti", "segmenti.geojson"], ["staze", "staze.geojson"], ["granica", "granica.geojson"], ["prijelazi", "prijelazi.geojson"]]) {
     const link = element("a", name);
@@ -1004,6 +1101,7 @@ async function start() {
     map.addSource("granica", { type: "geojson", data: data.granica });
     map.addSource("segmenti", { type: "geojson", data: data.segmenti });
     map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
+    map.addSource("magla", { type: "geojson", data: firstCorridor ? fogData(firstCorridor) : empty });
     map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
     map.addSource("podrucja", { type: "geojson", data: empty });
     for (const layer of dataLayers(theme, latitude)) map.addLayer(layer);
@@ -1014,6 +1112,7 @@ async function start() {
     setupClicks();
     setupHover();
     setupExport();
+    setupCorridorInput(firstCorridor !== null);
     recomputeAreas();
   });
 
