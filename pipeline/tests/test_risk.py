@@ -3,8 +3,10 @@
 All geometries are in metres (a projected CRS); the border is a straight line along the x axis.
 """
 
+import random
+
 import pytest
-from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry import LineString, MultiLineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
 from granice.risk import Params, RiskInput, Staza, Strana, assess_crossing_risk
@@ -34,18 +36,72 @@ def test_parallel_staze_200_m_apart_give_high_but_not_highest_risk() -> None:
 
 def test_nearest_pair_reports_how_far_each_end_lies_from_the_border() -> None:
     result = assess_crossing_risk(
-        RiskInput(border=[BORDER], staze=[hr(1, 300), bih(2, -800)]), Params()
+        RiskInput(border=[BORDER], staze=[hr(1, 300), bih(2, -400)]), Params()
     )
 
     for segment in result.segments:
-        assert segment.nearest_distance_m == pytest.approx(1100)
+        assert segment.nearest_distance_m == pytest.approx(700)
         assert segment.hr_border_distance_m == pytest.approx(300)
-        assert segment.bih_border_distance_m == pytest.approx(800)
+        assert segment.bih_border_distance_m == pytest.approx(400)
+
+
+def test_staza_farther_from_the_border_than_the_limit_does_not_count() -> None:
+    # A road 50 m from the border on one side and 1050 m on the other is not a pair at 1100 m.
+    result = assess_crossing_risk(
+        RiskInput(border=[BORDER], staze=[hr(1, 50), bih(2, -1050)]),
+        Params(max_border_distance_m=500),
+    )
+
+    assert {s.state for s in result.segments} == {"nedovoljno_podataka"}
+
+
+def test_only_the_part_of_a_staza_within_the_limit_can_end_a_nearest_pair() -> None:
+    # A BiH road leaving the border: 100 m from it at x = 0, 1100 m at x = 1000.
+    leaving = Staza(2, "cesta", Strana.BIH, LineString([(0, -100), (1000, -1100)]))
+    result = assess_crossing_risk(
+        RiskInput(border=[BORDER], staze=[hr(1, 50), leaving]), Params(max_border_distance_m=500)
+    )
+
+    first, second = result.segments
+    assert first.state == "procijenjen"
+    assert first.nearest_distance_m == pytest.approx(150)
+    assert second.state == "nedovoljno_podataka"  # there the road is 600 to 1100 m away
+
+
+def test_nearest_pair_is_the_exact_distance_between_the_staze_near_the_border() -> None:
+    rng = random.Random(7)
+    limit = 500
+    corridor = BORDER.buffer(limit)
+
+    def zigzag(sign: int) -> LineString:
+        xs = sorted(rng.uniform(-200, 1200) for _ in range(15))
+        return LineString([(x, sign * rng.uniform(5, 900)) for x in xs])
+
+    for _ in range(40):
+        hr_lines = [zigzag(1) for _ in range(3)]
+        bih_lines = [zigzag(-1) for _ in range(3)]
+        staze = [Staza(i, "cesta", Strana.HR, g) for i, g in enumerate(hr_lines)]
+        staze += [Staza(10 + i, "cesta", Strana.BIH, g) for i, g in enumerate(bih_lines)]
+        result = assess_crossing_risk(
+            RiskInput(border=[BORDER], staze=staze), Params(max_border_distance_m=limit)
+        )
+
+        for segment in result.segments:
+            near = segment.geometry.buffer(Params().search_radius_m, cap_style="flat") & corridor
+            hr_near = MultiLineString(hr_lines) & near
+            bih_near = MultiLineString(bih_lines) & near
+            if hr_near.is_empty or bih_near.is_empty:
+                continue
+            assert segment.state == "procijenjen"
+            assert segment.nearest_distance_m == pytest.approx(hr_near.distance(bih_near), abs=1e-6)
+            assert segment.hr_border_distance_m <= limit + 1
+            assert segment.bih_border_distance_m <= limit + 1
 
 
 def test_staze_2_km_apart_give_zero_risk() -> None:
     result = assess_crossing_risk(
-        RiskInput(border=[BORDER], staze=[hr(1, 1000), bih(2, -1000)]), Params()
+        RiskInput(border=[BORDER], staze=[hr(1, 1000), bih(2, -1000)]),
+        Params(max_border_distance_m=3000),
     )
 
     assert [s.risk_index for s in result.segments] == [0.0, 0.0]
@@ -63,7 +119,8 @@ def test_side_without_staze_is_nedovoljno_podataka_not_low_risk() -> None:
 def test_staza_beyond_search_radius_does_not_count_as_mapped() -> None:
     far_away = bih(2, -5000)
     result = assess_crossing_risk(
-        RiskInput(border=[BORDER], staze=[hr(1, 100), far_away]), Params()
+        RiskInput(border=[BORDER], staze=[hr(1, 100), far_away]),
+        Params(max_border_distance_m=10_000),
     )
 
     assert {s.state for s in result.segments} == {"nedovoljno_podataka"}

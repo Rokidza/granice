@@ -25,7 +25,7 @@ cd ..
 python -m granice serve            # http://127.0.0.1:8000/web/
 ```
 
-Zadani izvor su Geofabrik izvaci Hrvatske i BiH (`data/raw/geofabrik/`, čita ih `pyosmium`): cijela granica se izračuna za nekoliko minuta i ne ovisi o javnom poslužitelju. `--izvor overpass` dohvaća isto s Overpass API-ja u pločicama od pola stupnja (sporo, sat vremena i više, jer javni poslužitelji često vraćaju 502; odgovori se spremaju u `data/raw/`, pa se prekinuti dohvat nastavlja). `--podrucje pilot` računa samo Pilot odsječak, brže je za pokusne izmjene. Parametri izračuna mijenjaju se opcijama, npr. `python -m granice compute --segment-length-m 250 --near-distance-m 80`. Zadane vrijednosti i značenja: [`docs/ugovor-izlaza.md`](docs/ugovor-izlaza.md).
+Zadani izvor su Geofabrik izvaci Hrvatske i BiH (`data/raw/geofabrik/`, čita ih `pyosmium`): cijela granica se izračuna za nekoliko minuta i ne ovisi o javnom poslužitelju. `--izvor overpass` dohvaća isto s Overpass API-ja u pločicama od pola stupnja (sporo, sat vremena i više, jer javni poslužitelji često vraćaju 502; odgovori se spremaju u `data/raw/`, pa se prekinuti dohvat nastavlja). `--podrucje pilot` računa samo Pilot odsječak, brže je za pokusne izmjene. Parametri izračuna mijenjaju se opcijama, npr. `python -m granice compute --segment-length-m 250 --near-distance-m 80`. Koliko daleko od granice cesta još ulazi u izračun zadaje `--max-border-distance-m` (zadano 500 m, najviše 3500); dio ceste dalje od toga se odreže i na karti je zamagljen. Zadane vrijednosti i značenja: [`docs/ugovor-izlaza.md`](docs/ugovor-izlaza.md).
 
 Provjere:
 
@@ -55,7 +55,7 @@ python -m granice compute          # ili refresh, ako treba svježi OSM
 git add data/out && git commit -m "Osvježi izračunate slojeve" && git push
 ```
 
-Netlify zatim pokrene `npm ci && npm run vendor && npm run build` u `web/` i objavi `web/dist/`: stranicu, `vendor/`, pet slojeva u `data/` i `_headers` (`noindex`, bez cachea za podatke). Isto se može provjeriti lokalno: `cd web && npm install && npm run vendor && npm run build`.
+Netlify zatim pokrene `npm ci && npm run vendor && npm run build` u `web/` i objavi `web/dist/`: stranicu, `vendor/`, šest slojeva u `data/` i `_headers` (`noindex`, bez cachea za podatke). Isto se može provjeriti lokalno: `cd web && npm install && npm run vendor && npm run build`.
 
 Što to znači (ADR 0003): svatko s URL-om vidi kartu rizika. Izračunati slojevi su OSM izvedena baza, pa se objavljuju pod ODbL-om; stranica uz atribuciju nudi njihovo preuzimanje. Podloge (ADR 0002) dolaze s vanjskih servisa, a uvjete Esri i OpenTopoMap za javnu stranicu treba provjeriti; ako ne odgovaraju, uklonite unose `satelit` i `reljef` iz `web/config.js` prije `npm run build`.
 

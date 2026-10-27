@@ -9,6 +9,7 @@ import math
 from dataclasses import dataclass, field, replace
 from enum import Enum
 
+import numpy as np
 import shapely
 from shapely import STRtree
 from shapely.geometry import LineString, Point, Polygon
@@ -38,6 +39,9 @@ class Params:
     # on the road a few hundred metres back from the border line.
     sluzbeni_prijelaz_radius_m: float = 500.0
     search_radius_m: float = 3000.0  # how far from a segment a Staza still counts as mapped
+    # Only the part of a Staza at most this far from the border line takes part; the rest is cut
+    # off, so neither end of a nearest pair can lie farther from the border than this.
+    max_border_distance_m: float = 500.0
 
 
 @dataclass(frozen=True)
@@ -95,7 +99,7 @@ class _SpatialIndexes:
     hr: _SideIndex
     bih: _SideIndex
     water: STRtree
-    border: BaseGeometry
+    border: STRtree  # over the facets of the border line
 
 
 @dataclass(frozen=True)
@@ -124,13 +128,40 @@ def _split_chain(chain: LineString, length_m: float) -> list[LineString]:
     return parts
 
 
+def border_corridor(border: list[LineString], distance_m: float) -> BaseGeometry:
+    """The area at most `distance_m` from the border line."""
+    return shapely.union_all(border).buffer(distance_m)
+
+
+def clip_to_border(staze: list[Staza], border: list[LineString], distance_m: float) -> list[Staza]:
+    """The parts of the Staze at most `distance_m` from the border line. A Staza that leaves the
+    corridor and comes back becomes several pieces with the same `way_id`."""
+    corridor = border_corridor(border, distance_m)
+    shapely.prepare(corridor)
+    geometries = np.array([s.geometry for s in staze], dtype=object)
+    inside = shapely.covers(corridor, geometries)
+    touching = shapely.intersects(corridor, geometries)
+    clipped = []
+    for staza, whole, near in zip(staze, inside, touching, strict=True):
+        if whole:
+            clipped.append(staza)
+        elif near:
+            clipped += [
+                replace(staza, geometry=part)
+                for part in shapely.get_parts(staza.geometry.intersection(corridor))
+                if isinstance(part, LineString) and part.length > 0
+            ]
+    return clipped
+
+
 def assess_crossing_risk(data: RiskInput, params: Params) -> Assessment:
-    crossings = _crossing_points(data.staze)
+    staze = clip_to_border(data.staze, data.border, params.max_border_distance_m)
+    crossings = _crossing_points(staze)
     indexes = _SpatialIndexes(
-        _SideIndex([s for s in data.staze if s.strana == Strana.HR]),
-        _SideIndex([s for s in data.staze if s.strana == Strana.BIH]),
+        _SideIndex([s for s in staze if s.strana == Strana.HR]),
+        _SideIndex([s for s in staze if s.strana == Strana.BIH]),
         STRtree(data.water),
-        shapely.union_all(data.border),
+        STRtree(_facets(data.border)[0]),
     )
     segments: list[SegmentGranice] = []
     for chain_no, chain in enumerate(data.border):
@@ -235,17 +266,12 @@ def _assess_segment(
     bih_clips = indexes.bih.clip_to_zone(zone)
     if not hr_clips or not bih_clips:
         return SegmentGranice(chain, order, line, "nedovoljno_podataka")
-    hr = shapely.union_all([g for _, g in hr_clips])
-    bih = shapely.union_all([g for _, g in bih_clips])
-    link = shapely.shortest_line(hr, bih)
+    link, near_hr, near_bih = _nearest_pair(hr_clips, bih_clips)
     risk = risk_index(link.length, params)
     flags: tuple[str, ...] = ()
     if len(indexes.water.query(link, predicate="intersects")) > 0:
         risk = max(0.0, risk - params.river_penalty)
         flags = ("rijeka",)
-    hr_end, bih_end = Point(link.coords[0]), Point(link.coords[-1])
-    near_hr = _nearest(hr_end, hr_clips)
-    near_bih = _nearest(bih_end, bih_clips)
     return SegmentGranice(
         chain,
         order,
@@ -258,10 +284,45 @@ def _assess_segment(
         near_bih.way_id,
         near_hr.category,
         near_bih.category,
-        hr_end.distance(indexes.border),
-        bih_end.distance(indexes.border),
+        _distance_to(Point(link.coords[0]), indexes.border),
+        _distance_to(Point(link.coords[-1]), indexes.border),
     )
 
 
-def _nearest(point: Point, clips: list[tuple[Staza, BaseGeometry]]) -> Staza:
-    return min(clips, key=lambda c: c[1].distance(point))[0]
+def _facets(geometries: list[BaseGeometry]) -> tuple[np.ndarray, np.ndarray]:
+    """The straight two-point pieces of line geometries, and for each the index of the geometry it
+    comes from. Points (a Staza clipped to where it touches the zone) have none."""
+    parts, owner = shapely.get_parts(geometries, return_index=True)
+    coords, part = shapely.get_coordinates(parts, return_index=True)
+    same_part = part[1:] == part[:-1]
+    facets = shapely.linestrings(np.stack([coords[:-1][same_part], coords[1:][same_part]], axis=1))
+    return facets, owner[part[:-1][same_part]]
+
+
+def _nearest_pair(
+    hr_clips: list[tuple[Staza, BaseGeometry]], bih_clips: list[tuple[Staza, BaseGeometry]]
+) -> tuple[LineString, Staza, Staza]:
+    """The shortest link between the HR and the BiH Staze, and the Staza at each end.
+
+    The BiH facets go into an STR-tree. If any HR facet intersects one, the distance is 0.
+    Otherwise every HR facet looks up its nearest BiH facet by branch and bound (GEOS skips tree
+    nodes whose bounding box is farther than the best so far), and the closest of those wins.
+    About O((n + m) log m) for n HR and m BiH facets, and exact: the result equals the plain
+    distance between the two geometries, only faster than comparing every pair of facets.
+    """
+    hr_facets, hr_owner = _facets([g for _, g in hr_clips])
+    bih_facets, bih_owner = _facets([g for _, g in bih_clips])
+    tree = STRtree(bih_facets)
+    pairs = tree.query(hr_facets, predicate="intersects")
+    if pairs.shape[1] == 0:
+        pairs, distances = tree.query_nearest(hr_facets, return_distance=True, all_matches=False)
+        pairs = pairs[:, [int(np.argmin(distances))]]
+    i, j = pairs[:, 0]
+    link = shapely.shortest_line(hr_facets[i], bih_facets[j])
+    return link, hr_clips[hr_owner[i]][0], bih_clips[bih_owner[j]][0]
+
+
+def _distance_to(point: Point, facets: STRtree) -> float:
+    """Distance from `point` to the nearest of the facets in the tree (branch and bound)."""
+    _, distance = facets.query_nearest(point, return_distance=True, all_matches=False)
+    return float(distance[0])

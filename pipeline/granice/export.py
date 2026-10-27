@@ -9,16 +9,24 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import shapely
 from pyproj import Transformer
-from shapely.geometry import MultiLineString, mapping
+from shapely.geometry import LineString, MultiLineString, mapping
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, transform
 
 from granice.config import AREAS, RISK_CATEGORIES, BBox, DisputedSection
 from granice.prepare import Prepared
-from granice.risk import Assessment, KriticnoPodrucje, Params, SegmentGranice
+from granice.risk import (
+    Assessment,
+    KriticnoPodrucje,
+    Params,
+    SegmentGranice,
+    border_corridor,
+)
+from granice.river_border import RiverStretch
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 5
 COORD_DECIMALS = 5  # about 1 m
 
 
@@ -34,17 +42,24 @@ def write_layers(
     osm_timestamp: str,
     area: BBox,
     disputed: list[DisputedSection],
+    river_stretches: list[RiverStretch],
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     to_wgs84 = prepared.to_wgs84
     risk_input = prepared.risk_input
 
     layers = {
-        "staze": _staze(prepared, to_wgs84),
+        "staze": _staze(prepared, to_wgs84, params),
         "granica": _collection(
             _feature(to_wgs84, c, {"lanac": i}) for i, c in enumerate(risk_input.border)
         ),
         "segmenti": _collection(_segment(prepared, s) for s in assessment.segments),
+        "rijecna_granica": _collection(
+            _feature(
+                to_wgs84, r.geometry, {"lanac": r.chain, "duljina_m": round(r.geometry.length, 1)}
+            )
+            for r in river_stretches
+        ),
         "prijelazi": _prijelazi(prepared, assessment),
         "kriticna_podrucja": _collection(
             _area(to_wgs84, assessment, rank, area)
@@ -71,23 +86,39 @@ def write_layers(
     )
 
 
-def _staze(prepared: Prepared, to_wgs84: Transformer) -> dict[str, Any]:
+def _staze(prepared: Prepared, to_wgs84: Transformer, params: Params) -> dict[str, Any]:
+    """Every Staza, split where it leaves the corridor of `max_border_distance_m` around the border:
+    the part outside (`izvan_pojasa`) takes no part in the calculation and is drawn faded."""
+    corridor = border_corridor(prepared.risk_input.border, params.max_border_distance_m)
+    shapely.prepare(corridor)
     features = []
     for staza in prepared.risk_input.staze:
         tags = prepared.way_tags.get(staza.way_id, {})
-        features.append(
-            _feature(
-                to_wgs84,
-                staza.geometry,
-                {
-                    "id": staza.way_id,
-                    "strana": staza.strana.value,
-                    "kategorija": staza.category,
-                    "naziv": tags.get("name"),
-                    "highway": tags.get("highway"),
-                },
-            )
-        )
+        properties = {
+            "id": staza.way_id,
+            "strana": staza.strana.value,
+            "kategorija": staza.category,
+            "naziv": tags.get("name"),
+            "highway": tags.get("highway"),
+        }
+        if corridor.covers(staza.geometry):
+            pieces = [(staza.geometry, False)]
+        elif not corridor.intersects(staza.geometry):
+            pieces = [(staza.geometry, True)]
+        else:
+            pieces = [
+                (part, outside)
+                for outside, geometry in (
+                    (False, staza.geometry.intersection(corridor)),
+                    (True, staza.geometry.difference(corridor)),
+                )
+                for part in shapely.get_parts(geometry)
+                if isinstance(part, LineString) and part.length > 0
+            ]
+        features += [
+            _feature(to_wgs84, part, {**properties, "izvan_pojasa": outside})
+            for part, outside in pieces
+        ]
     return _collection(features)
 
 

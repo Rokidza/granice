@@ -34,6 +34,9 @@ export const BORDER_COLORS = {
 // Segments in the band and the circles around Kritična područja.
 export const DANGER = { light: "#c73751", dark: "#ff4d5e" };
 
+// Riječna granica: the stretches of the border that run along a river, bright blue.
+export const RIVER = { light: "#0a6cff", dark: "#3d9bff" };
+
 export function linearToOklab([r, g, b]) {
   const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
   const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);

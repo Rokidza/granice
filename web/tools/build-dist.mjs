@@ -14,7 +14,10 @@ const dataOut = join(web, "..", "data", "out");
 
 const PAGE_FILES = ["index.html", "app.js", "style.css", "js/colors.js", "js/critical.js", "js/package.json"];
 const VENDOR_FILES = ["maplibre-gl.js", "maplibre-gl.css", "pmtiles.js", "basemaps.js"];
-const DATA_FILES = ["meta.json", "staze.geojson", "granica.geojson", "segmenti.geojson", "prijelazi.geojson"];
+const DATA_FILES = [
+  "meta.json", "staze.geojson", "granica.geojson", "segmenti.geojson", "prijelazi.geojson",
+  "rijecna_granica.geojson",
+];
 
 const missing = [
   ...VENDOR_FILES.map((f) => join(web, "vendor", f)),

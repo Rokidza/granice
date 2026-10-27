@@ -26,6 +26,7 @@ from granice.geofabrik import GeofabrikSource
 from granice.osm import OsmSource, OverpassSource
 from granice.prepare import prepare
 from granice.risk import Params, assess_crossing_risk
+from granice.river_border import river_border
 
 log = logging.getLogger("granice")
 
@@ -36,6 +37,11 @@ def run(source: OsmSource, area: BBox, params: Params) -> None:
         raise SystemExit(
             f"--search-radius-m {params.search_radius_m:.0f} exceeds the fetched corridor "
             f"({CORRIDOR_M} m): segments would be wrongly reported as Nedovoljno podataka"
+        )
+    if params.max_border_distance_m > CORRIDOR_M:
+        raise SystemExit(
+            f"--max-border-distance-m {params.max_border_distance_m:.0f} exceeds the fetched "
+            f"corridor ({CORRIDOR_M} m): Staze beyond it are not downloaded"
         )
     data = source.load()
     log.info(
@@ -54,9 +60,17 @@ def run(source: OsmSource, area: BBox, params: Params) -> None:
         prepared.risk_input,
         staze=[s for s in prepared.risk_input.staze if s.category in RISK_CATEGORIES],
     )
-    log.info("%d Staza pieces of categories %s in the calculation", len(risk_input.staze), RISK_CATEGORIES)
+    log.info(
+        "%d Staza pieces of categories %s in the calculation",
+        len(risk_input.staze),
+        RISK_CATEGORIES,
+    )
     assessment = assess_crossing_risk(risk_input, params)
-    write_layers(OUT_DIR, prepared, assessment, params, data.timestamp, area, DISPUTED_SECTIONS)
+    rivers = river_border(prepared.risk_input.border, prepared.risk_input.water)
+    log.info("%.0f km of Riječna granica", sum(r.geometry.length for r in rivers) / 1000)
+    write_layers(
+        OUT_DIR, prepared, assessment, params, data.timestamp, area, DISPUTED_SECTIONS, rivers
+    )
     log.info(
         "%d segments, %d Kritična područja written to %s",
         len(assessment.segments),

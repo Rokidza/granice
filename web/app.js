@@ -6,6 +6,7 @@ import {
   BORDER_COLORS,
   CASING,
   DANGER,
+  RIVER,
   ROAD_STYLES,
   SURFACES,
 } from "./js/colors.js";
@@ -90,7 +91,7 @@ async function exists(url) {
 }
 
 async function loadAll() {
-  const names = ["meta", "staze", "granica", "segmenti", "prijelazi"];
+  const names = ["meta", "staze", "granica", "segmenti", "prijelazi", "rijecna_granica"];
   const files = await Promise.all(names.map((n) => loadJson(n + (n === "meta" ? ".json" : ".geojson"))));
   return Object.fromEntries(names.map((n, i) => [n, files[i]]));
 }
@@ -195,11 +196,17 @@ function bandFilters({ minM, maxM }) {
   };
 }
 
-/** Filter of the halo under the Staze of the nearest pairs within the band. */
+// Parts of Staze farther from the border than max_border_distance_m take no part in the
+// calculation (property izvan_pojasa, docs/ugovor-izlaza.md) and are drawn faded.
+const OUTSIDE_CORRIDOR = ["coalesce", ["get", "izvan_pojasa"], false];
+const FADED_OPACITY = 0.25;
+const corridorText = () => metres(state.meta.parametri.max_border_distance_m);
+
+/** Filter of the halo under the Staze of the nearest pairs within the band (their parts in the corridor). */
 function includedFilter(included) {
-  return ["any", ...Object.entries(included).map(([strana, ids]) => [
+  return ["all", ["!", OUTSIDE_CORRIDOR], ["any", ...Object.entries(included).map(([strana, ids]) => [
     "all", ["==", ["get", "strana"], strana], ["in", ["get", "id"], ["literal", [...ids.keys()]]],
-  ])];
+  ])]];
 }
 
 /**
@@ -223,6 +230,7 @@ function themedPaint(theme) {
     "staze-ukljucene": { "line-color": DANGER[theme] },
     "segmenti-casing": { "line-color": CASING[theme] },
     "segmenti-raspon": { "line-color": DANGER[theme] },
+    "rijecna-granica": { "line-color": RIVER[theme] },
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
     "segmenti-odabir": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
@@ -256,7 +264,7 @@ function dataLayers(theme, latitude) {
         paint: {
           ...colors[`staze-${category}-casing`],
           "line-width": roadScaled(style.width + style.casing),
-          "line-opacity": style.casingOpacity,
+          "line-opacity": ["case", OUTSIDE_CORRIDOR, style.casingOpacity * FADED_OPACITY, style.casingOpacity],
         },
       },
       {
@@ -265,12 +273,18 @@ function dataLayers(theme, latitude) {
         paint: {
           ...colors[`staze-${category}`],
           "line-width": roadScaled(style.width),
+          "line-opacity": ["case", OUTSIDE_CORRIDOR, FADED_OPACITY, 1],
           ...(style.dash ? { "line-dasharray": style.dash } : {}),
         },
       },
     );
   }
   layers.push(
+    // Riječna granica: a wide blue band under the segments, so a red segment on a river keeps its
+    // red and is edged in blue.
+    { id: "rijecna-granica", type: "line", source: "rijecna_granica",
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: { ...colors["rijecna-granica"], "line-width": zoomScaled(14), "line-opacity": 0.9 } },
     { id: "segmenti-casing", type: "line", source: "segmenti", filter: bands["segmenti-casing"],
       layout: { "line-cap": "butt" },
       paint: { ...colors["segmenti-casing"], "line-width": zoomScaled(9) } },
@@ -319,6 +333,7 @@ const LAYER_GROUPS = [
   { id: "staza", label: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
   { id: "ukljucene", label: "Ceste uključene u izračun (crveni obrub)", layers: ["staze-ukljucene"] },
   { id: "granica", label: "Granična linija", layers: ["granica-casing", "granica"] },
+  { id: "rijeka", label: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   {
     id: "segmenti", label: "Segmenti granice u rasponu i stanja",
     layers: [
@@ -549,6 +564,7 @@ function roadSample(category, theme) {
 
 function legendRow(visual, text, detail) {
   const row = element("div", undefined, "legend-row");
+  visual.title = detail ? `${text}: ${detail}` : text; // the name on hover over the symbol
   const label = element("span", text, "label");
   if (detail) label.append(element("small", detail));
   row.append(visual, label);
@@ -601,7 +617,15 @@ function renderLegend() {
         "Cesta uključena u izračun",
         "Cesta iz najbližeg para crvenog segmenta. Prijeđite mišem preko nje za udaljenost od granice.",
       ),
-      legendRow(hatchBox, "Nedovoljno podataka", "S barem jedne Strane nema mapiranih cesta. To nije nizak rizik."),
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, RIVER[theme], 12, { opacity: 0.9 });
+          sampleLine(svg, BORDER_COLORS[theme].line, 2.2, { dash: "7 3 2 3" });
+        }),
+        "Granica na rijeci",
+        "Granica teče rijekom ili uz vodu (do 75 m od nje).",
+      ),
+      legendRow(hatchBox, "Nedovoljno podataka", `S barem jedne Strane nema ceste unutar ${corridorText()} od granice. To nije nizak rizik.`),
       legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak", "Staza presijeca granicu izvan Službenog prijelaza (najviši rizik)."),
       legendRow(imageElement(sluzbeniPrijelazCanvas(), ""), "Službeni prijelaz", "Susjedni segmenti izuzeti su iz procjene."),
       legendRow(sample((svg) => sampleLine(svg, ink(theme), 2.4, { dash: "5 4" })), "Sporna granica", "Rizik se ne računa."),
@@ -624,6 +648,15 @@ function renderLegend() {
       legendRow(roadSample("staza", theme), "Staza / puteljak"),
       legendRow(
         sample((svg) => {
+          const { fill, casing } = ROAD_STYLES[theme].cesta;
+          sampleLine(svg, casing, 6.9, { opacity: FADED_OPACITY });
+          sampleLine(svg, fill, 4.2, { opacity: FADED_OPACITY });
+        }),
+        `Dalje od ${corridorText()} od granice (zamagljeno)`,
+        "Taj dio ceste ne ulazi u izračun. Granica pojasa je parametar izračuna (--max-border-distance-m).",
+      ),
+      legendRow(
+        sample((svg) => {
           sampleLine(svg, BORDER_COLORS[theme].casing, 5, { opacity: 0.85 });
           sampleLine(svg, BORDER_COLORS[theme].line, 2.2, { dash: "7 3 2 3" });
         }),
@@ -631,7 +664,7 @@ function renderLegend() {
       ),
     ),
   );
-  const note = element("p", "U izračun ulaze samo ceste; makadami, šumski putovi i staze prikazani su, ali se ne računaju. Raspon gleda samo udaljenost: segment s vodotokom između para cesta (oznaka „rijeka” u opisu segmenta) također je crven ako je u rasponu.", "legend-title");
+  const note = element("p", `U izračun ulaze samo dijelovi cesta do ${corridorText()} od granice; makadami, šumski putovi i staze prikazani su, ali se ne računaju. Udaljenost para je najmanje zbroj udaljenosti obiju cesta od granice, pa raspon iznad ${metres(2 * state.meta.parametri.max_border_distance_m)} hvata samo parove razmaknute uzduž granice. Raspon gleda samo udaljenost: segment s vodotokom između para cesta (oznaka „rijeka” u opisu segmenta) također je crven ako je u rasponu.`, "legend-title");
   legend.append(note);
 }
 
@@ -783,7 +816,7 @@ function segmentPopup(p) {
   const root = element("div", undefined, "popup");
   root.append(element("h3", `Segment granice ${p.id}`));
   const lead = {
-    nedovoljno_podataka: "Nedovoljno podataka: s barem jedne Strane nema mapiranih Staza. Rizik se ne procjenjuje, a to nije isto što i nizak rizik.",
+    nedovoljno_podataka: `Nedovoljno podataka: s barem jedne Strane nema ceste unutar ${corridorText()} od granice. Rizik se ne procjenjuje, a to nije isto što i nizak rizik.`,
     sluzbeni_prijelaz: "Uz Službeni prijelaz. Segment je izuzet iz procjene rizika.",
     sporna_granica: "Sporna granica. Za ovaj segment rizik se ne računa.",
   }[p.stanje];
@@ -817,24 +850,37 @@ function borderDistanceText(distances) {
     : `Od granice udaljena ${number(0).format(low)}–${metres(high)}`;
 }
 
-/** A tooltip on the Staze of the nearest pairs: how far from the border the pair was measured. */
-function setupIncludedHover() {
+/** The tooltip on the Staze of the nearest pairs: how far from the border the pair was measured. */
+function includedTooltip(p) {
+  const distances = state.included[p.strana]?.get(p.id);
+  if (!distances) return null;
+  const root = element("div", undefined, "popup");
+  root.append(element("strong", borderDistanceText(distances)));
+  const name = p.naziv || "cesta bez naziva";
+  const n = distances.length;
+  const few = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14);
+  const segments = `${n} ${n % 10 === 1 && n % 100 !== 11 ? "crveni segment" : few ? "crvena segmenta" : "crvenih segmenata"}`;
+  root.append(element("p", `${name} · ${p.strana} · najbliža cesta za ${segments}`));
+  return root;
+}
+
+function riverTooltip() {
+  const root = element("div", undefined, "popup");
+  root.append(element("strong", "Granica na rijeci"));
+  return root;
+}
+
+/** Tooltips that follow the mouse over a layer, one at a time. */
+function setupHover() {
   const { map } = state;
   const tooltip = new globalThis.maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "280px" });
-  map.on("mousemove", "staze-ukljucene", (event) => {
-    const p = event.features[0].properties;
-    const distances = state.included[p.strana]?.get(p.id);
-    if (!distances) return;
-    const root = element("div", undefined, "popup");
-    root.append(element("strong", borderDistanceText(distances)));
-    const name = p.naziv || "cesta bez naziva";
-    const n = distances.length;
-    const few = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14);
-    const segments = `${n} ${n % 10 === 1 && n % 100 !== 11 ? "crveni segment" : few ? "crvena segmenta" : "crvenih segmenata"}`;
-    root.append(element("p", `${name} · ${p.strana} · najbliža cesta za ${segments}`));
-    tooltip.setLngLat(event.lngLat).setDOMContent(root).addTo(map);
-  });
-  map.on("mouseleave", "staze-ukljucene", () => tooltip.remove());
+  for (const [layer, content] of [["staze-ukljucene", includedTooltip], ["rijecna-granica", riverTooltip]]) {
+    map.on("mousemove", layer, (event) => {
+      const root = content(event.features[0].properties);
+      if (root) tooltip.setLngLat(event.lngLat).setDOMContent(root).addTo(map);
+    });
+    map.on("mouseleave", layer, () => tooltip.remove());
+  }
 }
 
 function setupClicks() {
@@ -917,6 +963,7 @@ async function start() {
     $("data-links").append(link, " ");
   }
   $("area-tag").textContent = data.meta.podrucje === "pilot" ? "pilot odsječak" : "cijela granica";
+  $("corridor-tag").textContent = `ceste do ${corridorText()} od granice`;
   $("osm-date").textContent = `OSM podaci od: ${new Date(data.meta.osm_podaci_od).toLocaleString("hr-HR", { dateStyle: "long", timeStyle: "short" })}`;
 
   state.hasLocalBasemap = await exists(absolute(CONFIG.basemap));
@@ -956,6 +1003,7 @@ async function start() {
     map.addSource("staze", { type: "geojson", data: data.staze });
     map.addSource("granica", { type: "geojson", data: data.granica });
     map.addSource("segmenti", { type: "geojson", data: data.segmenti });
+    map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
     map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
     map.addSource("podrucja", { type: "geojson", data: empty });
     for (const layer of dataLayers(theme, latitude)) map.addLayer(layer);
@@ -964,7 +1012,7 @@ async function start() {
     setupBasemapChoice();
     showBasemap(state.basemap);
     setupClicks();
-    setupIncludedHover();
+    setupHover();
     setupExport();
     recomputeAreas();
   });

@@ -8,7 +8,7 @@ Promjena oblika podataka podiže `schema` u `meta.json`.
 
 | ključ | značenje |
 |---|---|
-| `schema` | verzija ugovora (trenutno 3) |
+| `schema` | verzija ugovora (trenutno 5) |
 | `osm_podaci_od` | vrijeme OSM podataka (ISO 8601), prikazuje se kao „OSM podaci od: …" |
 | `generirano` | vrijeme izračuna |
 | `podrucje` | `cijela` (cijela granica HR–BiH) \| `pilot` (samo Pilot odsječak) |
@@ -30,6 +30,9 @@ Promjena oblika podataka podiže `schema` u `meta.json`.
 | `river_penalty` | 0,25 | koliko se indeks spušta kad rijeka leži između najbližeg para („jedan stupanj") |
 | `sluzbeni_prijelaz_radius_m` | 500 | segmenti bliže od toga Službenom prijelazu izuzeti su iz procjene |
 | `search_radius_m` | 3000 | koliko daleko od segmenta Staza još vrijedi kao „mapirana" |
+| `max_border_distance_m` | 500 | u izračun ulazi samo dio Staze do te udaljenosti od granične linije; ostatak se odreže, pa nijedan kraj najbližeg para nije dalje od granice |
+
+Udaljenost najbližeg para je točna najmanja udaljenost između HR i BiH Staza (GEOS): STR-stablo odsječaka BiH Staza, najprije test presijecanja (udaljenost 0), zatim za svaki HR odsječak pretraga najbližeg uz odbacivanje dalekih čvorova (branch and bound). Spojnica para prelazi granicu, pa je `udaljenost_m` uvijek barem `hr_od_granice_m + bih_od_granice_m`.
 
 Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oznaka `rijeka` oduzima `river_penalty`.
 
@@ -37,7 +40,7 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 
 `LineString`, jedan dio po Strani (Staza koja prelazi granicu dolazi kao dva dijela s istim `id`).
 
-`id` (OSM way), `strana` (`HR` | `BiH`), `kategorija` (`cesta` | `makadam` | `staza`), `naziv`, `highway`.
+`id` (OSM way), `strana` (`HR` | `BiH`), `kategorija` (`cesta` | `makadam` | `staza`), `naziv`, `highway`, `izvan_pojasa` (dio dalje od `max_border_distance_m` od granice: ne ulazi u izračun, na karti je zamagljen). Staza koja izlazi iz pojasa dolazi kao više dijelova s istim `id`.
 
 ## `granica.geojson`
 
@@ -59,6 +62,10 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 | `izravni_prelazak` | Staza presijeca granicu izvan Službenog prijelaza (`rizik` je 1) |
 | `hr_staza_id`, `hr_staza_naziv`, `hr_staza_kategorija` | najbliža Staza HR Strane (isto `bih_…`) |
 | `hr_od_granice_m`, `bih_od_granice_m` | koliko je kraj najbližeg para na toj Strani udaljen od granične linije; `null` osim za `procijenjen` |
+
+## `rijecna_granica.geojson`
+
+`LineString` dijelovi granične linije koji teku rijekom ili uz vodu: točke granice do 75 m od osi rijeke (`waterway=river`) ili obrisa vodene površine (`natural=water`). Prekidi do 150 m se premošćuju, a dijelovi kraći od 300 m (rijeka samo presijeca granicu) izostavljaju. Pragovi su u `granice/river_border.py`. Svojstva `lanac`, `duljina_m`.
 
 ## `prijelazi.geojson`
 
