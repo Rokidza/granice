@@ -1,6 +1,6 @@
 // Validates the map colours for both themes: the red of the segments in the chosen band (contrast
 // against the surface or casing, separation from the road colours under colour-vision-deficiency
-// simulation), the road categories and the Kritična područja circles.
+// simulation) and the road categories.
 // Method after the dataviz checks: OKLab distance x100, Machado et al. 2009 at severity 1.0.
 // Usage: npm run check-colors   (exit code 1 on any failure)
 

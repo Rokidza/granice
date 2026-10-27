@@ -47,6 +47,4 @@ export default {
   // Default band of the nearest-pair distance in metres: segments within it are drawn red and
   // grouped into Kritična područja. The planner changes it in the sidebar.
   band: { minM: 1000, maxM: 1200 },
-  // Number of Kritična područja listed by default.
-  topN: 10,
 };

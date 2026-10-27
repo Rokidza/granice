@@ -1,8 +1,7 @@
-// Colours of the map: the segments in the chosen band of pair distances, the road categories and
-// the Kritična područja marks.
+// Colours of the map: the segments in the chosen band of pair distances and the road categories.
 //
-// There is no colour scale: a segment is either in the band the planner picked (red, the same red
-// as the circles around Kritična područja) or not coloured at all.
+// There is no colour scale: a segment is either in the band the planner picked (red) or not
+// coloured at all.
 // Run `npm run check-colors` after changing anything here.
 
 export const SURFACES = { light: "#fcfcfb", dark: "#1a1a19" };
@@ -31,7 +30,7 @@ export const BORDER_COLORS = {
   dark: { line: "#f4f2ec", casing: "#0d0d0d" },
 };
 
-// Segments in the band and the circles around Kritična područja.
+// Segments in the band.
 export const DANGER = { light: "#c73751", dark: "#ff4d5e" };
 
 // Riječna granica: the stretches of the border that run along a river, bright blue.

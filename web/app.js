@@ -11,10 +11,6 @@ import {
   SURFACES,
 } from "./js/colors.js";
 import {
-  areaBounds,
-  areaCircle,
-  areasToCsv,
-  areasToGeoJson,
   includedStaze,
   kriticnaPodrucja,
 } from "./js/critical.js";
@@ -52,8 +48,6 @@ const SEGMENT_LAYERS = [
   "segmenti-sporna",
   "segmenti-prijelaz",
 ];
-const METRES_PER_DEGREE = 111320;
-
 const state = {
   map: null,
   meta: null,
@@ -63,7 +57,6 @@ const state = {
   corridorRequest: 0, // bumped per choice, so a slow file cannot land after a newer choice
   measure: { active: false, points: [], label: null }, // the measuring tool: up to two [lon, lat]
   areas: [],
-  selectedArea: null,
   band: { ...CONFIG.band }, // nearest-pair distances (m) drawn red and grouped into Kritična područja
   included: { HR: new Map(), BiH: new Map() }, // Staze of those nearest pairs (includedStaze)
   hasLocalBasemap: false,
@@ -73,8 +66,6 @@ const state = {
   basemapIds: [], // layers and sources currently added for it
   basemapSources: [],
   basemapRequest: 0, // bumped per switch, so a slow style fetch cannot land after a newer choice
-  markers: [], // numbered badges of the Kritična područja on the map
-  showAreaMarks: true,
 };
 const styleCache = new Map();
 
@@ -211,17 +202,6 @@ function includedFilter(included) {
   ])];
 }
 
-/**
- * Circle radius in pixels for a radius in metres (property `radius_m`), so a circle keeps its
- * size on the ground while zooming. Exponential base 2 between two zooms is exact for that.
- */
-function circleRadius(latitude) {
-  // MapLibre's world is 512 px wide at zoom 0.
-  const metresPerPixelAtZoom0 = 78271.51696 * Math.cos((latitude * Math.PI) / 180);
-  const atZoom = (zoom) => ["max", 12, ["*", ["get", "radius_m"], 2 ** zoom / metresPerPixelAtZoom0]];
-  return ["interpolate", ["exponential", 2], ["zoom"], 8, atZoom(8), 16, atZoom(16)];
-}
-
 /** Paint properties that depend on the colour theme, by layer id. */
 function themedPaint(theme) {
   const border = BORDER_COLORS[theme];
@@ -240,8 +220,6 @@ function themedPaint(theme) {
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
     "segmenti-odabir": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
-    "podrucja-halo": { "circle-stroke-color": SURFACES[theme] },
-    "podrucja-krug": { "circle-color": DANGER[theme], "circle-stroke-color": DANGER[theme] },
   };
   for (const category of CATEGORIES) {
     const { fill, casing } = ROAD_STYLES[theme][category];
@@ -251,7 +229,7 @@ function themedPaint(theme) {
   return paint;
 }
 
-function dataLayers(theme, latitude) {
+function dataLayers(theme) {
   const colors = themedPaint(theme);
   const bands = bandFilters(state.band);
   const layers = [
@@ -322,14 +300,6 @@ function dataLayers(theme, latitude) {
       filter: ["==", ["get", "tip"], "izravni_prelazak"],
       layout: { "icon-image": "ikona-izravni", "icon-allow-overlap": true,
         "icon-size": ICON_SIZE } },
-    // Kritična područja: a red circle around each, on top of everything else.
-    { id: "podrucja-halo", type: "circle", source: "podrucja",
-      paint: { ...colors["podrucja-halo"], "circle-radius": circleRadius(latitude), "circle-opacity": 0,
-        "circle-stroke-width": 7, "circle-stroke-opacity": 0.8, "circle-pitch-alignment": "map" } },
-    { id: "podrucja-krug", type: "circle", source: "podrucja",
-      paint: { ...colors["podrucja-krug"], "circle-radius": circleRadius(latitude),
-        "circle-opacity": ["case", ["get", "odabrano"], 0.12, 0.04],
-        "circle-stroke-width": 3, "circle-stroke-opacity": 1, "circle-pitch-alignment": "map" } },
     // The measuring tool, above everything.
     { id: "mjerenje-casing", type: "line", source: "mjerenje", filter: ["==", ["geometry-type"], "LineString"],
       layout: { "line-cap": "round" }, paint: { ...colors["mjerenje-casing"], "line-width": 6 } },
@@ -357,16 +327,9 @@ const LAYER_GROUPS = [
     ],
   },
   { id: "prijelazi", label: "Službeni prijelazi", layers: ["prijelazi-sluzbeni"] },
-  {
-    id: "podrucja", label: "Kritična područja (krugovi)", layers: ["podrucja-halo", "podrucja-krug"],
-    onChange: (visible) => {
-      state.showAreaMarks = visible;
-      for (const marker of state.markers) marker.getElement().style.display = visible ? "" : "none";
-    },
-  },
 ];
 
-/** Re-colours the data layers, legend and Kritična područja for the current palette. */
+/** Re-colours the data layers and legend for the current palette. */
 function applyTheme() {
   const theme = mapTheme();
   const { map } = state;
@@ -376,7 +339,6 @@ function applyTheme() {
   }
   $("map").style.setProperty("--danger", DANGER[theme]);
   renderLegend();
-  renderAreas();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -646,17 +608,6 @@ function renderLegend() {
       legendRow(sample((svg) => sampleLine(svg, ink(theme), 2.4, { dash: "5 4" })), "Sporna granica", "Rizik se ne računa."),
     ),
     legendGroup(
-      "Kritična područja",
-      legendRow(
-        sample((svg) => {
-          svg.append(svgElement("circle", { cx: 17, cy: 10, r: 7.5, fill: DANGER[theme], "fill-opacity": 0.12, stroke: DANGER[theme], "stroke-width": 2.4 }));
-          svg.append(svgElement("circle", { cx: 17, cy: 2.5, r: 3, fill: DANGER[theme], stroke: "#fff", "stroke-width": 1 }));
-        }),
-        "Kritično područje",
-        "Niz susjednih segmenata u odabranom rasponu. Broj je rang (najdulji prvi).",
-      ),
-    ),
-    legendGroup(
       "Staze i granica",
       legendRow(roadSample("cesta", theme), "Cesta"),
       legendRow(roadSample("makadam", theme), "Makadam / šumski put"),
@@ -799,19 +750,12 @@ function recomputeAreas(moved) {
   state.included = includedStaze(state.segments, state.band);
   state.map.setFilter("staze-ukljucene", includedFilter(state.included));
   state.areas = kriticnaPodrucja(state.segments, state.band);
-  state.selectedArea = null;
   renderLegend();
-  renderAreas();
+  renderAreasSummary();
 }
 
-const shownAreas = () => {
-  const topN = Math.max(1, Number($("top-n").value) || CONFIG.topN);
-  return state.areas.slice(0, topN);
-};
-
-/** The list in the sidebar and the circles with numbered badges on the map. */
-function renderAreas() {
-  const shown = shownAreas();
+/** How many Kritična područja the band gives and how long they are in total. */
+function renderAreasSummary() {
   const total = state.areas.reduce((sum, a) => sum + a.lengthM, 0);
   const summary = $("areas-summary");
   summary.replaceChildren();
@@ -819,86 +763,11 @@ function renderAreas() {
     const n = state.areas.length;
     summary.append(
       element("strong", String(n)), ` ${n % 10 === 1 && n % 100 !== 11 ? "područje" : "područja"} · `,
-      element("strong", kilometres(total)), ` ukupno. Prikazano prvih ${shown.length}.`,
+      element("strong", kilometres(total)), " ukupno.",
     );
   } else {
     summary.textContent = "Nema Kritičnih područja u ovom rasponu.";
   }
-
-  const list = $("areas");
-  list.replaceChildren();
-  for (const area of shown) {
-    const item = element("li", undefined, "area" + (state.selectedArea === area.rang ? " selected" : ""));
-    item.tabIndex = 0;
-    item.dataset.rang = String(area.rang);
-    item.setAttribute("role", "button");
-    item.setAttribute("aria-label", `Kritično područje ${area.rang}, zumiraj na kartu`);
-    const main = element("div", undefined, "area-main");
-    const pair = area.minDistanceM === area.maxDistanceM
-      ? metres(area.minDistanceM)
-      : `${number(0).format(area.minDistanceM)}–${metres(area.maxDistanceM)}`;
-    main.append(element("strong", kilometres(area.lengthM)), element("span", `najbliži par ${pair}`));
-    item.append(element("span", String(area.rang), "badge"), main);
-    const select = () => selectArea(area);
-    item.addEventListener("click", select);
-    item.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        select();
-      }
-    });
-    list.append(item);
-  }
-  renderAreaMarks(shown);
-}
-
-function renderAreaMarks(shown) {
-  const { map } = state;
-  const circles = shown.map((area) => ({ area, ...areaCircle(area) }));
-  map.getSource("podrucja")?.setData({
-    type: "FeatureCollection",
-    features: circles.map(({ area, lon, lat, radiusM }) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [lon, lat] },
-      properties: { rang: area.rang, radius_m: radiusM, odabrano: area.rang === state.selectedArea },
-    })),
-  });
-  for (const marker of state.markers) marker.remove();
-  state.markers = circles.map(({ area, lon, lat, radiusM }) => {
-    const badge = element("button", String(area.rang), "area-badge" + (area.rang === state.selectedArea ? " selected" : ""));
-    badge.type = "button";
-    badge.setAttribute("aria-label", `Kritično područje ${area.rang}`);
-    badge.addEventListener("click", () => selectArea(area));
-    if (!state.showAreaMarks) badge.style.display = "none";
-    // On the top edge of the circle, so the badge does not cover the Staze inside it.
-    return new globalThis.maplibregl.Marker({ element: badge })
-      .setLngLat([lon, lat + radiusM / METRES_PER_DEGREE])
-      .addTo(map);
-  });
-}
-
-function selectArea(area) {
-  state.selectedArea = area.rang;
-  state.map.fitBounds(areaBounds(area), { padding: 140, maxZoom: 14, duration: 600 });
-  renderAreas();
-  document.querySelector(`.area[data-rang="${area.rang}"]`)?.scrollIntoView({ block: "nearest" });
-}
-
-function download(filename, type, text) {
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([text], { type }));
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-function setupExport() {
-  const band = () => `${state.band.minM}-${state.band.maxM}m`;
-  $("export-csv").addEventListener("click", () =>
-    download(`kriticna-podrucja-${band()}.csv`, "text/csv", areasToCsv(state.areas)));
-  $("export-geojson").addEventListener("click", () =>
-    download(`kriticna-podrucja-${band()}.geojson`, "application/geo+json",
-      JSON.stringify(areasToGeoJson(state.areas), null, 1)));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1133,7 +1002,6 @@ async function start() {
   setBandLimits();
   $("band-min").value = String(state.band.minM);
   $("band-max").value = String(state.band.maxM);
-  $("top-n").value = String(CONFIG.topN);
   for (const [name, file] of [["segmenti", "segmenti.geojson"], ["staze", "staze.geojson"], ["granica", "granica.geojson"], ["prijelazi", "prijelazi.geojson"]]) {
     const link = element("a", name);
     link.href = CONFIG.dataDir + file;
@@ -1155,7 +1023,6 @@ async function start() {
 
   const theme = mapTheme();
   const bounds = boundsOf(data.granica.features);
-  const latitude = (bounds[0][1] + bounds[1][1]) / 2;
   const map = new globalThis.maplibregl.Map({
     container: "map",
     attributionControl: false,
@@ -1184,9 +1051,8 @@ async function start() {
     map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
     map.addSource("magla", { type: "geojson", data: firstCorridor ? fogData(firstCorridor) : empty });
     map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
-    map.addSource("podrucja", { type: "geojson", data: empty });
     map.addSource("mjerenje", { type: "geojson", data: empty });
-    for (const layer of dataLayers(theme, latitude)) map.addLayer(layer);
+    for (const layer of dataLayers(theme)) map.addLayer(layer);
 
     renderToggles();
     setupBasemapChoice();
@@ -1194,7 +1060,6 @@ async function start() {
     setupClicks();
     setupHover();
     setupMeasure();
-    setupExport();
     setupCorridorInput(firstCorridor !== null);
     recomputeAreas();
   });
@@ -1204,7 +1069,6 @@ async function start() {
       if (map.getLayer("segmenti-raspon")) recomputeAreas(event.target); // once the layers are added
     });
   }
-  $("top-n").addEventListener("input", renderAreas);
   darkQuery.addEventListener("change", () => {
     showBasemap(state.basemap); // "Karta" has a style per theme; this applies the palette too
   });

@@ -50,13 +50,6 @@ h1, h2, p, ul, ol { margin: 0; padding: 0; }
 ul, ol { list-style: none; }
 
 /* Persistent notices */
-.banner {
-  display: flex; gap: 10px; align-items: center;
-  background: var(--banner-bg); color: var(--banner-ink);
-  border-bottom: 2px solid var(--banner-line);
-  padding: 6px 16px; font-size: 13px;
-}
-.banner-icon { font-size: 16px; }
 .notice-bar {
   flex: none; padding: 5px 16px; background: var(--surface);
   border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px;
@@ -92,7 +85,7 @@ details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: "▾"; color: var(--muted); }
 details.panel:not([open]) > summary::after { content: "▸"; }
 details.panel[open] > summary { margin-bottom: 10px; }
-summary:focus-visible, button:focus-visible, input:focus-visible, .area:focus-visible {
+summary:focus-visible, button:focus-visible, input:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
@@ -113,24 +106,6 @@ input[type="number"] {
   border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit;
 }
 
-/* Kritična područja list */
-.areas { margin-top: 12px; max-height: 250px; overflow-y: auto; display: grid; gap: 6px; padding-right: 2px; align-content: start; }
-.area {
-  display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center;
-  padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised);
-  cursor: pointer;
-}
-.area:hover { border-color: var(--danger); }
-.area.selected { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
-.area-main { display: grid; line-height: 1.3; }
-.area-main strong { font-variant-numeric: tabular-nums; }
-.area-main span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.badge {
-  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
-  background: var(--danger); color: #fff; font-weight: 700; font-size: 12px; flex: none;
-}
-
-.buttons { display: flex; gap: 8px; margin-top: 12px; }
 button {
   flex: 1; background: var(--raised); color: var(--ink); border: 1px solid var(--line);
   border-radius: 7px; padding: 6px 10px; font: inherit; cursor: pointer;
@@ -206,14 +181,6 @@ main { flex: 1; position: relative; min-width: 0; }
   background: var(--surface); color: var(--ink); border: 2px solid var(--banner-line);
   border-radius: 8px; z-index: 5;
 }
-
-/* Kritično područje markers: a numbered red badge on top of its circle */
-.area-badge {
-  display: grid; place-items: center; width: 30px; height: 30px; padding: 0; flex: none;
-  border-radius: 50%; background: var(--danger); color: #fff; font-weight: 700; font-size: 14px;
-  border: 2px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .5); cursor: pointer;
-}
-.area-badge.selected { width: 36px; height: 36px; font-size: 16px; }
 
 /* Popup */
 .maplibregl-popup-content {

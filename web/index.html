@@ -9,12 +9,6 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="banner" role="note">
-    <span class="banner-icon" aria-hidden="true">⚠</span>
-    <span><strong>Minski sumnjiva područja nisu prikazana.</strong>
-    Staze na karti mogu prolaziti kroz minski sumnjiva područja. Prikaz Staze ne znači da je put siguran.</span>
-  </div>
-
   <div class="layout">
     <aside class="sidebar" aria-label="Upravljanje kartom">
       <header class="brand">
@@ -38,14 +32,6 @@
             <label for="band-max">do</label>
             <input id="band-max" type="range" min="0" step="50" aria-label="Najbliži par cesta do (m)">
           </div>
-          <label class="inline" for="top-n">Prikaži prvih
-            <input id="top-n" type="number" min="1" max="100" step="1">
-          </label>
-        </div>
-        <ol id="areas" class="areas"></ol>
-        <div class="buttons">
-          <button type="button" id="export-csv">Izvezi CSV</button>
-          <button type="button" id="export-geojson">Izvezi GeoJSON</button>
         </div>
       </section>
 
