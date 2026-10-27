@@ -27,8 +27,13 @@
         <h2 id="h-areas">Kritična područja</h2>
         <p id="areas-summary" class="summary" aria-live="polite"></p>
         <div class="controls">
-          <label for="threshold">Prag: najbliži par Staza do <output id="threshold-value"></output></label>
-          <input id="threshold" type="range" min="100" max="1000" step="50">
+          <p>Najbliži par Staza od <output id="band-value"></output></p>
+          <div class="band">
+            <label for="band-min">od</label>
+            <input id="band-min" type="range" min="0" step="50" aria-label="Najbliži par Staza od (m)">
+            <label for="band-max">do</label>
+            <input id="band-max" type="range" min="0" step="50" aria-label="Najbliži par Staza do (m)">
+          </div>
           <label class="inline" for="top-n">Prikaži prvih
             <input id="top-n" type="number" min="1" max="100" step="1">
           </label>

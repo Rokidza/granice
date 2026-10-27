@@ -8,7 +8,7 @@
   --muted: #6b6a66;
   --line: #e2e1da;
   --accent: #184f95;
-  --danger: #d7263d;
+  --danger: #c73751;
   --banner-bg: #fff4d6;
   --banner-ink: #3b2a00;
   --banner-line: #b27b00;
@@ -101,8 +101,9 @@ summary:focus-visible, button:focus-visible, input:focus-visible, .area:focus-vi
 
 /* Kritična područja controls */
 .controls { display: grid; gap: 8px; }
-.controls label { color: var(--ink-2); }
+.controls label, .controls p { color: var(--ink-2); }
 .controls output { color: var(--ink); font-weight: 700; }
+.band { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
 input[type="range"] { width: 100%; accent-color: var(--danger); margin: 0; }
 label.inline { display: flex; align-items: center; gap: 8px; }
 input[type="number"] {
@@ -113,7 +114,7 @@ input[type="number"] {
 /* Kritična područja list */
 .areas { margin-top: 12px; max-height: 250px; overflow-y: auto; display: grid; gap: 6px; padding-right: 2px; align-content: start; }
 .area {
-  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center;
   padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised);
   cursor: pointer;
 }
@@ -122,11 +123,6 @@ input[type="number"] {
 .area-main { display: grid; line-height: 1.3; }
 .area-main strong { font-variant-numeric: tabular-nums; }
 .area-main span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.risk-pill {
-  min-width: 42px; text-align: center; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid #3d3c39; color: #161615; font-weight: 700; font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
 .badge {
   display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
   background: var(--danger); color: #fff; font-weight: 700; font-size: 12px; flex: none;
@@ -148,11 +144,7 @@ button:hover { border-color: var(--ink-2); }
 .legend-row .label small { display: block; color: var(--muted); font-size: 11.5px; }
 .sample { display: inline-grid; place-items: center; width: 40px; height: 22px; border-radius: 4px; }
 .sample svg { display: block; }
-.legend-icon { width: 22px; height: 22px; }
-.ramp { position: relative; height: 12px; border: 1px solid #3d3c39; border-radius: 3px; margin: 6px 4px 22px; }
-.ramp .tick { position: absolute; top: 12px; transform: translateX(-50%); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
-.ramp .tick::before { content: ""; position: absolute; left: 50%; top: -12px; height: 12px; border-left: 1px solid var(--ink); }
-.ramp-caption { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 0 4px 2px; }
+.legend-icon { width: 26px; height: 26px; }
 .hatch-swatch {
   width: 28px; height: 12px; border: 1px solid #8a8a85; border-radius: 2px;
   background: repeating-linear-gradient(45deg, #4a4945 0 2px, #bdbcb4 2px 5px);
@@ -169,7 +161,7 @@ button:hover { border-color: var(--ink-2); }
 
 /* Map */
 main { flex: 1; position: relative; min-width: 0; }
-#map { position: absolute; inset: 0; --danger: #d7263d; }
+#map { position: absolute; inset: 0; --danger: #c73751; }
 
 .map-tools { position: absolute; top: 12px; left: 12px; z-index: 3; display: grid; gap: 6px; justify-items: start; }
 .segmented {
@@ -196,11 +188,11 @@ main { flex: 1; position: relative; min-width: 0; }
 
 /* Kritično područje markers: a numbered red badge on top of its circle */
 .area-badge {
-  display: grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: none;
-  border-radius: 50%; background: var(--danger); color: #fff; font-weight: 700; font-size: 12px;
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0; flex: none;
+  border-radius: 50%; background: var(--danger); color: #fff; font-weight: 700; font-size: 14px;
   border: 2px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .5); cursor: pointer;
 }
-.area-badge.selected { width: 32px; height: 32px; font-size: 14px; }
+.area-badge.selected { width: 36px; height: 36px; font-size: 16px; }
 
 /* Popup */
 .maplibregl-popup-content {

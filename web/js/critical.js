@@ -1,21 +1,21 @@
-// Kritična područja computed in the browser, so the planner can change the threshold.
-// Mirrors pipeline/granice/risk.py (_kriticna_podrucja); keep the two in step.
+// Kritična područja computed in the browser from the band of pair distances the planner picks
+// (e.g. 1000–1200 m). The pipeline's kriticna_podrucja.geojson (risk.py, _kriticna_podrucja) still
+// uses its index threshold and is meant for other tools; the page does not read it.
 
-/** Risk index in [0, 1]: 1 at `near_distance_m` or closer, 0 at `far_distance_m` or farther. */
-export function riskIndex(distanceM, params) {
-  const { near_distance_m: near, far_distance_m: far } = params;
-  if (distanceM <= near) return 1;
-  if (distanceM >= far) return 0;
-  return 1 - Math.log(distanceM / near) / Math.log(far / near);
+/**
+ * Whether a segment is assessed and its nearest pair of Staze lies within the band, both ends
+ * included. `bandFilter` in app.js is the same test as a map expression; keep the two in step.
+ * @param {{minM: number, maxM: number}} band
+ */
+export function inBand(p, band) {
+  return p.stanje === "procijenjen" && p.udaljenost_m >= band.minM && p.udaljenost_m <= band.maxM;
 }
 
 /**
- * Runs of adjacent assessed segments whose risk index reaches that of `thresholdM`,
- * ranked by peak risk and then by length.
+ * Runs of adjacent segments within the band, longest first and then by the closest pair.
  * @param {object[]} segments GeoJSON features from segmenti.geojson
  */
-export function kriticnaPodrucja(segments, thresholdM, params) {
-  const threshold = riskIndex(thresholdM, params) - 1e-9;
+export function kriticnaPodrucja(segments, band) {
   const ordered = [...segments].sort(
     (a, b) => a.properties.lanac - b.properties.lanac || a.properties.red - b.properties.red,
   );
@@ -23,7 +23,7 @@ export function kriticnaPodrucja(segments, thresholdM, params) {
   let previous = null;
   for (const segment of ordered) {
     const p = segment.properties;
-    if (p.rizik === null || p.rizik < threshold) {
+    if (!inBand(p, band)) {
       previous = null;
       continue;
     }
@@ -41,10 +41,10 @@ export function kriticnaPodrucja(segments, thresholdM, params) {
     segmentCount: run.length,
     lengthM: run.reduce((sum, s) => sum + s.properties.duljina_m, 0),
     minDistanceM: Math.min(...run.map((s) => s.properties.udaljenost_m)),
-    peakRisk: Math.max(...run.map((s) => s.properties.rizik)),
+    maxDistanceM: Math.max(...run.map((s) => s.properties.udaljenost_m)),
     segments: run,
   }));
-  areas.sort((a, b) => b.peakRisk - a.peakRisk || b.lengthM - a.lengthM);
+  areas.sort((a, b) => b.lengthM - a.lengthM || a.minDistanceM - b.minDistanceM);
   return areas.map((area, i) => ({ rang: i + 1, ...area }));
 }
 
@@ -89,7 +89,7 @@ export function areasToGeoJson(areas) {
         broj_segmenata: area.segmentCount,
         duljina_m: round(area.lengthM, 1),
         najmanja_udaljenost_m: round(area.minDistanceM, 1),
-        vrh_rizika: round(area.peakRisk, 4),
+        najveca_udaljenost_m: round(area.maxDistanceM, 1),
       },
     })),
   };
@@ -102,7 +102,7 @@ const CSV_COLUMNS = [
   "broj_segmenata",
   "duljina_m",
   "najmanja_udaljenost_m",
-  "vrh_rizika",
+  "najveca_udaljenost_m",
   "sredina_lat",
   "sredina_lon",
 ];
@@ -117,7 +117,7 @@ export function areasToCsv(areas) {
       area.segmentCount,
       round(area.lengthM, 1),
       round(area.minDistanceM, 1),
-      round(area.peakRisk, 4),
+      round(area.maxDistanceM, 1),
       round((south + north) / 2, 5),
       round((west + east) / 2, 5),
     ];

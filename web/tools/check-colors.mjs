@@ -1,6 +1,6 @@
-// Validates the map colours for both themes: the risk scale (lightness order and steps, contrast
-// against the surface or casing, separation under colour-vision-deficiency simulation), the road
-// categories and the Kritična područja red.
+// Validates the map colours for both themes: the red of the segments in the chosen band (contrast
+// against the surface or casing, separation from the road colours under colour-vision-deficiency
+// simulation), the road categories and the Kritična područja circles.
 // Method after the dataviz checks: OKLab distance x100, Machado et al. 2009 at severity 1.0.
 // Usage: npm run check-colors   (exit code 1 on any failure)
 
@@ -12,7 +12,6 @@ import {
   hexToLinear,
   linearToHex,
   linearToOklab,
-  riskColor,
 } from "../js/colors.js";
 
 const CVD = {
@@ -21,8 +20,6 @@ const CVD = {
   tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.3039]],
 };
 
-const SAMPLES = 6; // discrete steps compared by eye; the scale itself is continuous
-const MIN_STEP_DL = 0.06; // adjacent lightness step
 const MIN_CVD_DELTA_E = 6;
 
 const simulate = (hex, matrix) =>
@@ -44,32 +41,13 @@ const report = (ok, name, detail) => {
   if (!ok) failures += 1;
 };
 
-// The scale is the same in both themes; what differs is the surface and casing it sits on.
-const stops = Array.from({ length: SAMPLES }, (_, i) => riskColor(i / (SAMPLES - 1)));
-console.log(`
-Risk scale: ${stops.join(" ")}`);
-const lightness = stops.map((hex) => lab(hex)[0]);
-const steps = lightness.slice(1).map((l, i) => lightness[i] - l); // darker = higher risk
-report(
-  Math.min(...steps) >= MIN_STEP_DL,
-  "lightness steps",
-  `smallest step ${Math.min(...steps).toFixed(3)} (need >= ${MIN_STEP_DL}, monotone)`,
-);
-for (const [name, matrix] of Object.entries(CVD)) {
-  const simulated = stops.map((hex) => simulate(hex, matrix));
-  const worst = Math.min(...simulated.slice(1).map((hex, i) => deltaE(hex, simulated[i])));
-  report(worst >= MIN_CVD_DELTA_E, `adjacent steps under ${name}`, `worst delta E ${worst.toFixed(1)} (need >= ${MIN_CVD_DELTA_E})`);
-}
-
 for (const theme of ["light", "dark"]) {
   const surface = SURFACES[theme];
   console.log(`
 ${theme} theme, surface ${surface}, casing ${CASING[theme]}`);
-  const faint = stops[0];
-  const strong = stops[SAMPLES - 1];
-  const seen = (hex) => Math.max(contrast(hex, surface), contrast(hex, CASING[theme]));
-  report(seen(faint) >= 3, "faintest risk end vs surface or casing", `${seen(faint).toFixed(2)}:1 (need >= 3)`);
-  report(seen(strong) >= 3, "strongest risk end vs surface or casing", `${seen(strong).toFixed(2)}:1 (need >= 3)`);
+  const band = DANGER[theme];
+  const seen = Math.max(contrast(band, surface), contrast(band, CASING[theme]));
+  report(seen >= 3, "band red vs surface or casing", `${seen.toFixed(2)}:1 (need >= 3)`);
 
   const roads = ROAD_STYLES[theme];
   for (const [category, { fill, casing }] of Object.entries(roads)) {
@@ -82,6 +60,11 @@ ${theme} theme, surface ${surface}, casing ${CASING[theme]}`);
     `cesta/makadam ${deltaE(roads.cesta.fill, roads.makadam.fill).toFixed(1)}, makadam/staza ${deltaE(roads.makadam.fill, roads.staza.fill).toFixed(1)}`,
   );
   report(contrast(DANGER[theme], surface) >= 3, "Kritično područje red vs surface", `${contrast(DANGER[theme], surface).toFixed(2)}:1`);
+  // Staze cross the band, so the red must not pass for a road colour.
+  for (const [name, matrix] of Object.entries(CVD)) {
+    const worst = Math.min(...Object.values(roads).map(({ fill }) => deltaE(simulate(band, matrix), simulate(fill, matrix))));
+    report(worst >= MIN_CVD_DELTA_E, `band red vs road colours under ${name}`, `worst delta E ${worst.toFixed(1)} (need >= ${MIN_CVD_DELTA_E})`);
+  }
 }
 
 console.log(failures === 0 ? "\nAll colour checks pass." : `\n${failures} colour check(s) FAILED.`);

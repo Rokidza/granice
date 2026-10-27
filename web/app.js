@@ -8,8 +8,6 @@ import {
   DANGER,
   ROAD_STYLES,
   SURFACES,
-  riskColor,
-  riskStops,
 } from "./js/colors.js";
 import {
   areaBounds,
@@ -45,7 +43,8 @@ const CATEGORY_STYLE = {
 const FIRST_DATA_LAYER = "staze-staza-casing"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
 const SEGMENT_LAYERS = [
-  "segmenti-rizik",
+  "segmenti-raspon",
+  "segmenti-izvan",
   "segmenti-nedovoljno",
   "segmenti-sporna",
   "segmenti-prijelaz",
@@ -58,6 +57,7 @@ const state = {
   segments: [],
   areas: [],
   selectedArea: null,
+  band: { ...CONFIG.band }, // nearest-pair distances (m) drawn red and grouped into Kritična područja
   hasLocalBasemap: false,
   hasGlyphs: false,
   basemaps: [],
@@ -119,8 +119,12 @@ function hatchCanvas() {
   });
 }
 
+// Map icons are drawn on a 48-unit grid at twice that size, so they stay sharp when shown large.
+const ICON_PX = 96;
+
 function sluzbeniPrijelazCanvas() {
-  return drawn(48, (g) => {
+  return drawn(ICON_PX, (g) => {
+    g.scale(ICON_PX / 48, ICON_PX / 48);
     g.fillStyle = "#ffffff";
     g.strokeStyle = "#0b0b0b";
     g.lineWidth = 3;
@@ -136,7 +140,8 @@ function sluzbeniPrijelazCanvas() {
 }
 
 function izravniPrelazakCanvas() {
-  return drawn(48, (g) => {
+  return drawn(ICON_PX, (g) => {
+    g.scale(ICON_PX / 48, ICON_PX / 48);
     g.fillStyle = "#0b0b0b";
     g.strokeStyle = "#ffffff";
     g.lineWidth = 3;
@@ -169,10 +174,23 @@ const roadScaled = (width) => [
   "interpolate", ["linear"], ["zoom"], 8, width * 0.45, 12, width, 15, width * 2,
 ];
 
-const ICON_SIZE = ["interpolate", ["linear"], ["zoom"], 8, 0.35, 12, 0.7, 15, 1];
+// Icons are 48 px at size 1 (96 px canvas at pixel ratio 2): about 22 px with the whole border in
+// view, 36 px at street level.
+const ICON_SIZE = ["interpolate", ["linear"], ["zoom"], 7, 0.45, 10, 0.6, 13, 0.75, 15, 0.85];
 
-function riskExpression() {
-  return ["interpolate", ["linear"], ["get", "rizik"], ...riskStops().flat()];
+const stanjeIs = (value) => ["==", ["get", "stanje"], value];
+
+/** Filters of the segment layers for a band; the band test is `inBand` in js/critical.js. */
+function bandFilters({ minM, maxM }) {
+  const inside = [
+    "all", stanjeIs("procijenjen"),
+    [">=", ["get", "udaljenost_m"], minM], ["<=", ["get", "udaljenost_m"], maxM],
+  ];
+  return {
+    "segmenti-casing": ["any", inside, stanjeIs("nedovoljno_podataka")],
+    "segmenti-raspon": inside,
+    "segmenti-izvan": ["all", stanjeIs("procijenjen"), ["!", inside]],
+  };
 }
 
 /**
@@ -193,7 +211,7 @@ function themedPaint(theme) {
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
     "segmenti-casing": { "line-color": CASING[theme] },
-    "segmenti-rizik": { "line-color": riskExpression() },
+    "segmenti-raspon": { "line-color": DANGER[theme] },
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
     "segmenti-odabir": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
@@ -210,6 +228,7 @@ function themedPaint(theme) {
 
 function dataLayers(theme, latitude) {
   const colors = themedPaint(theme);
+  const bands = bandFilters(state.band);
   const layers = [];
   for (const category of CATEGORIES) {
     const style = CATEGORY_STYLE[category];
@@ -235,21 +254,22 @@ function dataLayers(theme, latitude) {
       },
     );
   }
-  const stanje = (...values) => ["in", ["get", "stanje"], ["literal", values]];
   layers.push(
-    { id: "segmenti-casing", type: "line", source: "segmenti",
-      filter: stanje("procijenjen", "nedovoljno_podataka"),
+    { id: "segmenti-casing", type: "line", source: "segmenti", filter: bands["segmenti-casing"],
       layout: { "line-cap": "butt" },
       paint: { ...colors["segmenti-casing"], "line-width": zoomScaled(9) } },
-    { id: "segmenti-rizik", type: "line", source: "segmenti", filter: stanje("procijenjen"),
+    { id: "segmenti-raspon", type: "line", source: "segmenti", filter: bands["segmenti-raspon"],
       layout: { "line-cap": "butt" },
-      paint: { ...colors["segmenti-rizik"], "line-width": zoomScaled(6) } },
-    { id: "segmenti-nedovoljno", type: "line", source: "segmenti", filter: stanje("nedovoljno_podataka"),
+      paint: { ...colors["segmenti-raspon"], "line-width": zoomScaled(6) } },
+    // Assessed segments outside the band are not drawn, only kept clickable.
+    { id: "segmenti-izvan", type: "line", source: "segmenti", filter: bands["segmenti-izvan"],
+      paint: { "line-color": "#000000", "line-opacity": 0, "line-width": zoomScaled(6) } },
+    { id: "segmenti-nedovoljno", type: "line", source: "segmenti", filter: stanjeIs("nedovoljno_podataka"),
       layout: { "line-cap": "butt" },
       paint: { "line-pattern": "hatch", "line-width": zoomScaled(6) } },
-    { id: "segmenti-sporna", type: "line", source: "segmenti", filter: stanje("sporna_granica"),
+    { id: "segmenti-sporna", type: "line", source: "segmenti", filter: stanjeIs("sporna_granica"),
       paint: { ...colors["segmenti-sporna"], "line-width": zoomScaled(3), "line-dasharray": [2, 2] } },
-    { id: "segmenti-prijelaz", type: "line", source: "segmenti", filter: stanje("sluzbeni_prijelaz"),
+    { id: "segmenti-prijelaz", type: "line", source: "segmenti", filter: stanjeIs("sluzbeni_prijelaz"),
       paint: { ...colors["segmenti-prijelaz"], "line-width": zoomScaled(4) } },
     { id: "segmenti-odabir", type: "line", source: "segmenti", filter: ["==", ["get", "id"], ""],
       paint: { ...colors["segmenti-odabir"], "line-width": zoomScaled(16), "line-opacity": 0.45 } },
@@ -283,9 +303,9 @@ const LAYER_GROUPS = [
   { id: "staza", label: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
   { id: "granica", label: "Granična linija", layers: ["granica-casing", "granica"] },
   {
-    id: "rizik", label: "Rizik prelaska po segmentima",
+    id: "segmenti", label: "Segmenti granice u rasponu i stanja",
     layers: [
-      "segmenti-casing", "segmenti-rizik", "segmenti-nedovoljno", "segmenti-sporna",
+      "segmenti-casing", "segmenti-raspon", "segmenti-izvan", "segmenti-nedovoljno", "segmenti-sporna",
       "segmenti-prijelaz", "segmenti-odabir", "prijelazi-izravni",
     ],
   },
@@ -536,33 +556,24 @@ function legendGroup(title, ...rows) {
 }
 
 function renderLegend() {
-  const { near_distance_m: near, far_distance_m: far } = state.meta.parametri;
   const theme = mapTheme();
   const legend = $("legend");
   legend.replaceChildren();
-
-  // Risk scale
-  const ramp = element("div", undefined, "ramp");
-  ramp.setAttribute("role", "img");
-  ramp.setAttribute("aria-label", `Skala rizika od ${near} m (najviši) do ${far} m (najniži)`);
-  const stops = riskStops().map(([index, color]) => `${color} ${((1 - index) * 100).toFixed(1)}%`);
-  ramp.style.background = `linear-gradient(to right, ${stops.reverse().join(", ")})`;
-  for (const d of [250, 500, 1000]) {
-    const tick = element("span", `${d} m`, "tick");
-    tick.style.left = (Math.log(d / near) / Math.log(far / near)) * 100 + "%";
-    ramp.append(tick);
-  }
-  const caption = element("div", undefined, "ramp-caption");
-  caption.append(element("span", `viši rizik (≤ ${near} m)`), element("span", `niži rizik (≥ ${far} m)`));
 
   const hatch = element("span", undefined, "hatch-swatch");
   const hatchBox = element("span", undefined, "sample");
   hatchBox.append(hatch);
   legend.append(
     legendGroup(
-      "Rizik prelaska: zračna udaljenost najbližeg para Staza HR–BiH u segmentu",
-      ramp,
-      caption,
+      "Segmenti granice: zračna udaljenost najbližeg para Staza HR–BiH",
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, CASING[theme], 9);
+          sampleLine(svg, DANGER[theme], 6);
+        }),
+        `Najbliži par od ${bandText(state.band)}`,
+        "Odabrani raspon. Ostali procijenjeni segmenti nisu obojeni.",
+      ),
       legendRow(hatchBox, "Nedovoljno podataka", "S barem jedne Strane nema mapiranih Staza. To nije nizak rizik."),
       legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak", "Staza presijeca granicu izvan Službenog prijelaza (najviši rizik)."),
       legendRow(imageElement(sluzbeniPrijelazCanvas(), ""), "Službeni prijelaz", "Susjedni segmenti izuzeti su iz procjene."),
@@ -576,7 +587,7 @@ function renderLegend() {
           svg.append(svgElement("circle", { cx: 17, cy: 2.5, r: 3, fill: DANGER[theme], stroke: "#fff", "stroke-width": 1 }));
         }),
         "Kritično područje",
-        "Niz susjednih segmenata s visokim rizikom. Broj je rang.",
+        "Niz susjednih segmenata u odabranom rasponu. Broj je rang (najdulji prvi).",
       ),
     ),
     legendGroup(
@@ -593,18 +604,34 @@ function renderLegend() {
       ),
     ),
   );
-  const note = element("p", "Oznaka „rijeka”: vodotok između najbližeg para Staza spušta rizik za jedan stupanj.", "legend-title");
+  const note = element("p", "Raspon gleda samo udaljenost: segment s vodotokom između para Staza (oznaka „rijeka” u opisu segmenta) također je crven ako je u rasponu.", "legend-title");
   legend.append(note);
 }
 
 const kilometres = (metres) =>
   metres >= 1000 ? `${number(1).format(metres / 1000)} km` : `${number(0).format(metres)} m`;
 
-function recomputeAreas() {
-  const threshold = Number($("threshold").value);
-  $("threshold-value").textContent = `${threshold} m`;
-  state.areas = kriticnaPodrucja(state.segments, threshold, state.meta.parametri);
+const metres = (value) => `${number(0).format(value)} m`;
+const bandText = ({ minM, maxM }) => `${number(0).format(minM)} do ${metres(maxM)}`;
+
+/** Reads the band from its two sliders. Moving one past the other drags the other along. */
+function readBand(moved) {
+  const min = $("band-min");
+  const max = $("band-max");
+  if (Number(min.value) > Number(max.value)) {
+    if (moved === min) max.value = min.value;
+    else min.value = max.value;
+  }
+  return { minM: Number(min.value), maxM: Number(max.value) };
+}
+
+function recomputeAreas(moved) {
+  state.band = readBand(moved);
+  $("band-value").textContent = bandText(state.band);
+  for (const [layerId, filter] of Object.entries(bandFilters(state.band))) state.map.setFilter(layerId, filter);
+  state.areas = kriticnaPodrucja(state.segments, state.band);
   state.selectedArea = null;
+  renderLegend();
   renderAreas();
 }
 
@@ -626,7 +653,7 @@ function renderAreas() {
       element("strong", kilometres(total)), ` ukupno. Prikazano prvih ${shown.length}.`,
     );
   } else {
-    summary.textContent = "Nema Kritičnih područja uz ovaj prag.";
+    summary.textContent = "Nema Kritičnih područja u ovom rasponu.";
   }
 
   const list = $("areas");
@@ -638,12 +665,11 @@ function renderAreas() {
     item.setAttribute("role", "button");
     item.setAttribute("aria-label", `Kritično područje ${area.rang}, zumiraj na kartu`);
     const main = element("div", undefined, "area-main");
-    main.append(element("strong", kilometres(area.lengthM)), element("span", `najbliži par ${number(0).format(area.minDistanceM)} m`));
-    const pill = element("span", number(2).format(area.peakRisk), "risk-pill");
-    pill.style.background = riskColor(area.peakRisk);
-    if (area.peakRisk >= 0.62) pill.style.color = "#fff"; // dark red end of the scale
-    pill.title = "Rizik prelaska (od 0 do 1)";
-    item.append(element("span", String(area.rang), "badge"), main, pill);
+    const pair = area.minDistanceM === area.maxDistanceM
+      ? metres(area.minDistanceM)
+      : `${number(0).format(area.minDistanceM)}–${metres(area.maxDistanceM)}`;
+    main.append(element("strong", kilometres(area.lengthM)), element("span", `najbliži par ${pair}`));
+    item.append(element("span", String(area.rang), "badge"), main);
     const select = () => selectArea(area);
     item.addEventListener("click", select);
     item.addEventListener("keydown", (event) => {
@@ -698,11 +724,11 @@ function download(filename, type, text) {
 }
 
 function setupExport() {
-  const threshold = () => Number($("threshold").value);
+  const band = () => `${state.band.minM}-${state.band.maxM}m`;
   $("export-csv").addEventListener("click", () =>
-    download(`kriticna-podrucja-${threshold()}m.csv`, "text/csv", areasToCsv(state.areas)));
+    download(`kriticna-podrucja-${band()}.csv`, "text/csv", areasToCsv(state.areas)));
   $("export-geojson").addEventListener("click", () =>
-    download(`kriticna-podrucja-${threshold()}m.geojson`, "application/geo+json",
+    download(`kriticna-podrucja-${band()}.geojson`, "application/geo+json",
       JSON.stringify(areasToGeoJson(state.areas), null, 1)));
 }
 
@@ -817,8 +843,12 @@ async function start() {
   state.meta = data.meta;
   state.segments = data.segmenti.features;
 
-  const params = data.meta.parametri;
-  $("threshold").value = String(params.critical_distance_m);
+  // The sliders reach the farthest pair in the data, rounded up to 500 m.
+  const farthest = Math.max(0, ...state.segments.map((s) => s.properties.udaljenost_m ?? 0));
+  for (const [id, value] of [["band-min", state.band.minM], ["band-max", state.band.maxM]]) {
+    $(id).max = String(Math.max(Math.ceil(farthest / 500) * 500, state.band.maxM));
+    $(id).value = String(value);
+  }
   $("top-n").value = String(CONFIG.topN);
   for (const [name, file] of [["segmenti", "segmenti.geojson"], ["staze", "staze.geojson"], ["granica", "granica.geojson"], ["prijelazi", "prijelazi.geojson"]]) {
     const link = element("a", name);
@@ -878,9 +908,11 @@ async function start() {
     recomputeAreas();
   });
 
-  $("threshold").addEventListener("input", () => {
-    if (map.loaded()) recomputeAreas();
-  });
+  for (const id of ["band-min", "band-max"]) {
+    $(id).addEventListener("input", (event) => {
+      if (map.getLayer("segmenti-raspon")) recomputeAreas(event.target); // once the layers are added
+    });
+  }
   $("top-n").addEventListener("input", renderAreas);
   darkQuery.addEventListener("change", () => {
     showBasemap(state.basemap); // "Karta" has a style per theme; this applies the palette too
