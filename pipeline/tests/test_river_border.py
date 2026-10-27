@@ -5,7 +5,8 @@ A stretch reaches up to the tolerance (75 m) past the end of the water, hence th
 import pytest
 from shapely.geometry import LineString
 
-from granice.river_border import river_border
+from granice.risk import SegmentGranice
+from granice.river_border import river_border, river_segments
 
 BORDER = LineString([(0, 0), (5000, 0)])
 
@@ -36,3 +37,16 @@ def test_short_gap_in_the_water_is_bridged() -> None:
 
 def test_water_far_from_the_border_is_ignored() -> None:
     assert river_border([BORDER], [LineString([(0, 500), (5000, 500)])]) == []
+
+
+def test_segment_mostly_on_the_river_is_a_river_segment() -> None:
+    river = LineString([(1000, 30), (3000, 30)])
+    stretches = river_border([BORDER], [river])  # about 930 to 3070 along the border
+    segments = [
+        SegmentGranice(
+            0, order, LineString([(order * 500, 0), ((order + 1) * 500, 0)]), "procijenjen"
+        )
+        for order in range(10)
+    ]
+
+    assert river_segments(segments, stretches) == {(0, 2), (0, 3), (0, 4), (0, 5)}

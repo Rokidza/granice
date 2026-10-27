@@ -80,6 +80,9 @@ class SegmentGranice:
     # How far from the border line the two ends of the nearest pair lie.
     hr_border_distance_m: float | None = None
     bih_border_distance_m: float | None = None
+    # The shortest line between the nearest pair, from the HR end to the BiH end: where one would
+    # walk across the border from one road to the other.
+    link: LineString | None = None
 
 
 @dataclass(frozen=True)
@@ -189,6 +192,7 @@ def assess_crossing_risk(data: RiskInput, params: Params) -> Assessment:
                     risk_index=1.0,
                     nearest_distance_m=0.0,
                     flags=segment.flags + ("izravni_prelazak",),
+                    link=None,  # the Staza itself crosses here: no walking between roads
                 )
             segments.append(segment)
     return Assessment(segments, _kriticna_podrucja(segments, params))
@@ -286,6 +290,7 @@ def _assess_segment(
         near_bih.category,
         _distance_to(Point(link.coords[0]), indexes.border),
         _distance_to(Point(link.coords[-1]), indexes.border),
+        link,
     )
 
 

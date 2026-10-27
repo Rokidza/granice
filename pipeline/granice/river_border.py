@@ -8,10 +8,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import shapely
 from shapely import STRtree
 from shapely.geometry import LineString
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import substring
+
+from granice.risk import SegmentGranice
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,23 @@ def river_border(
         for start, end in _runs(positions[distances <= params.tolerance_m], params):
             stretches.append(RiverStretch(chain_no, substring(chain, start, end)))
     return stretches
+
+
+def river_segments(
+    segments: list[SegmentGranice], stretches: list[RiverStretch], min_share: float = 0.5
+) -> set[tuple[int, int]]:
+    """(chain, order) of the segments lying on Riječna granica for at least `min_share` of their
+    length. Stretches are cut from the same border line, so a 1 m tolerance absorbs rounding."""
+    by_chain: dict[int, list[LineString]] = {}
+    for stretch in stretches:
+        by_chain.setdefault(stretch.chain, []).append(stretch.geometry)
+    river = {chain: shapely.union_all(lines).buffer(1.0) for chain, lines in by_chain.items()}
+    return {
+        (s.chain, s.order)
+        for s in segments
+        if s.chain in river
+        and s.geometry.intersection(river[s.chain]).length >= min_share * s.geometry.length
+    }
 
 
 def _runs(positions: np.ndarray, params: RiverParams) -> list[tuple[float, float]]:

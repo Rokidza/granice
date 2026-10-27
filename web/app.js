@@ -11,6 +11,7 @@ import {
   SURFACES,
 } from "./js/colors.js";
 import {
+  inBand,
   includedStaze,
   kriticnaPodrucja,
 } from "./js/critical.js";
@@ -41,6 +42,7 @@ const CATEGORY_STYLE = {
 };
 const FIRST_DATA_LAYER = "staze-ukljucene"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
+const SKIP_RIVER_STORAGE_KEY = "granice.bez-rijeke";
 const SEGMENT_LAYERS = [
   "segmenti-raspon",
   "segmenti-izvan",
@@ -56,6 +58,7 @@ const state = {
   corridorFiles: new Map(), // pojasevi/<m>.json requests by value
   corridorRequest: 0, // bumped per choice, so a slow file cannot land after a newer choice
   measure: { active: false, points: [], label: null }, // the measuring tool: up to two [lon, lat]
+  skipRiver: false, // red segments on Riječna granica left out of the band (na_rijeci)
   areas: [],
   band: { ...CONFIG.band }, // nearest-pair distances (m) drawn red and grouped into Kritična područja
   included: { HR: new Map(), BiH: new Map() }, // Staze of those nearest pairs (includedStaze)
@@ -180,10 +183,11 @@ const ICON_SIZE = ["interpolate", ["linear"], ["zoom"], 7, 0.45, 10, 0.6, 13, 0.
 const stanjeIs = (value) => ["==", ["get", "stanje"], value];
 
 /** Filters of the segment layers for a band; the band test is `inBand` in js/critical.js. */
-function bandFilters({ minM, maxM }) {
+function bandFilters({ minM, maxM, skipRiver }) {
   const inside = [
     "all", stanjeIs("procijenjen"),
     [">=", ["get", "udaljenost_m"], minM], ["<=", ["get", "udaljenost_m"], maxM],
+    ...(skipRiver ? [["!", ["coalesce", ["get", "na_rijeci"], false]]] : []),
   ];
   return {
     "segmenti-casing": ["any", inside, stanjeIs("nedovoljno_podataka")],
@@ -673,8 +677,8 @@ function loadCorridor(distanceM) {
 function applyCorridor(choice) {
   const rows = new Map(choice.segmenti.map((row) => [row.id, row]));
   state.segments = state.segments.map((feature) => {
-    const { id, lanac, red, duljina_m } = feature.properties;
-    return { ...feature, properties: { ...rows.get(id), id, lanac, red, duljina_m } };
+    const { id, lanac, red, duljina_m, na_rijeci } = feature.properties;
+    return { ...feature, properties: { ...rows.get(id), id, lanac, red, duljina_m, na_rijeci } };
   });
   state.corridorM = choice.max_border_distance_m;
   state.map.getSource("segmenti").setData({ type: "FeatureCollection", features: state.segments });
@@ -727,8 +731,47 @@ function setBandLimits() {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Ignoring red segments on Riječna granica (na_rijeci): a river makes the crossing harder, so the
+// planner can leave those out of the band and the Kritična područja.
+
+function readSkipRiver() {
+  try {
+    return localStorage.getItem(SKIP_RIVER_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function renderSkipRiver() {
+  const button = $("skip-river");
+  const detail = $("skip-river-detail");
+  if (!state.segments.some((s) => "na_rijeci" in s.properties)) {
+    button.disabled = true;
+    detail.textContent = "Podaci nemaju oznaku rijeke: pokrenite python -m granice compute.";
+    return;
+  }
+  button.setAttribute("aria-pressed", String(state.skipRiver));
+  const onRiver = state.segments.filter((s) => s.properties.na_rijeci && inBand(s.properties, { ...state.band, skipRiver: false })).length;
+  const few = onRiver % 10 >= 2 && onRiver % 10 <= 4 && (onRiver % 100 < 12 || onRiver % 100 > 14);
+  const noun = onRiver % 10 === 1 && onRiver % 100 !== 11 ? "crveni segment" : few ? "crvena segmenta" : "crvenih segmenata";
+  detail.textContent = state.skipRiver
+    ? `Uključeno: skriveno ${onRiver} ${noun} na rijeci.`
+    : `Isključeno: ${onRiver} ${noun} u rasponu leži na rijeci.`;
+}
+
+function setupSkipRiver() {
+  $("skip-river").addEventListener("click", () => {
+    state.skipRiver = !state.skipRiver;
+    try {
+      localStorage.setItem(SKIP_RIVER_STORAGE_KEY, state.skipRiver ? "1" : "0");
+    } catch { /* storage unavailable: the choice just is not remembered */ }
+    recomputeAreas();
+  });
+}
+
 function recomputeAreas(moved) {
-  state.band = readBand(moved);
+  state.band = { ...readBand(moved), skipRiver: state.skipRiver };
   $("band-value").textContent = bandText(state.band);
   for (const [layerId, filter] of Object.entries(bandFilters(state.band))) state.map.setFilter(layerId, filter);
   state.included = includedStaze(state.segments, state.band);
@@ -736,6 +779,7 @@ function recomputeAreas(moved) {
   state.areas = kriticnaPodrucja(state.segments, state.band);
   renderLegend();
   renderAreasSummary();
+  renderSkipRiver();
 }
 
 /** How many Kritična područja the band gives and how long they are in total. */
@@ -978,6 +1022,7 @@ async function start() {
   state.meta = data.meta;
   state.segments = data.segmenti.features;
   state.corridorM = data.meta.parametri.max_border_distance_m; // segmenti.geojson is computed for it
+  state.skipRiver = readSkipRiver();
   let firstCorridor = null;
   try {
     firstCorridor = await loadCorridor(state.corridorM);
@@ -1045,6 +1090,7 @@ async function start() {
     setupHover();
     setupMeasure();
     setupCorridorChoice(firstCorridor !== null);
+    setupSkipRiver();
     recomputeAreas();
   });
 

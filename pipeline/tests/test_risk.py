@@ -45,6 +45,19 @@ def test_nearest_pair_reports_how_far_each_end_lies_from_the_border() -> None:
         assert segment.bih_border_distance_m == pytest.approx(400)
 
 
+def test_nearest_pair_link_runs_from_the_hr_end_to_the_bih_end() -> None:
+    hr_road = Staza(1, "cesta", Strana.HR, LineString([(0, 400), (900, 100), (1000, 400)]))
+    bih_road = Staza(2, "cesta", Strana.BIH, LineString([(0, -400), (900, -200), (1000, -400)]))
+    result = assess_crossing_risk(
+        RiskInput(border=[BORDER], staze=[hr_road, bih_road]), Params(segment_length_m=1000)
+    )
+
+    for segment in result.segments:
+        assert segment.link is not None
+        assert segment.link.coords[0] == pytest.approx((900, 100))
+        assert segment.link.coords[-1] == pytest.approx((900, -200))
+
+
 def test_staza_farther_from_the_border_than_the_limit_does_not_count() -> None:
     # A road 50 m from the border on one side and 1050 m on the other is not a pair at 1100 m.
     result = assess_crossing_risk(

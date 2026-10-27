@@ -24,16 +24,16 @@ from granice.risk import (
     SegmentGranice,
     border_corridor,
 )
-from granice.river_border import RiverStretch
+from granice.river_border import RiverStretch, river_segments
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 COORD_DECIMALS = 5  # about 1 m
 
 CHOICES_DIR = "pojasevi"  # one file per precomputed max_border_distance_m
 FOG_MARGIN_M = 100_000  # how far around the border the fog outside the corridor reaches
 FOG_SIMPLIFY_M = 10.0  # the fog is only drawn, so its edge may be this much off
 # Properties of a segment that do not depend on max_border_distance_m (kept in segmenti.geojson).
-_FIXED_SEGMENT_KEYS = ("lanac", "red", "duljina_m")
+_FIXED_SEGMENT_KEYS = ("lanac", "red", "duljina_m", "na_rijeci")
 
 
 def segment_id(chain: int, order: int) -> str:
@@ -55,12 +55,15 @@ def write_layers(
     to_wgs84 = prepared.to_wgs84
     risk_input = prepared.risk_input
 
+    on_river = river_segments(assessment.segments, river_stretches)
     layers = {
         "staze": _staze(prepared, to_wgs84),
         "granica": _collection(
             _feature(to_wgs84, c, {"lanac": i}) for i, c in enumerate(risk_input.border)
         ),
-        "segmenti": _collection(_segment(prepared, s) for s in assessment.segments),
+        "segmenti": _collection(
+            _segment(prepared, s, (s.chain, s.order) in on_river) for s in assessment.segments
+        ),
         "rijecna_granica": _collection(
             _feature(
                 to_wgs84, r.geometry, {"lanac": r.chain, "duljina_m": round(r.geometry.length, 1)}
@@ -153,8 +156,9 @@ def _staze(prepared: Prepared, to_wgs84: Transformer) -> dict[str, Any]:
     return _collection(features)
 
 
-def _segment(prepared: Prepared, segment: SegmentGranice) -> dict[str, Any]:
-    return _feature(prepared.to_wgs84, segment.geometry, _segment_properties(prepared, segment))
+def _segment(prepared: Prepared, segment: SegmentGranice, on_river: bool) -> dict[str, Any]:
+    properties = {**_segment_properties(prepared, segment), "na_rijeci": on_river}
+    return _feature(prepared.to_wgs84, segment.geometry, properties)
 
 
 def _segment_properties(prepared: Prepared, segment: SegmentGranice) -> dict[str, Any]:
@@ -178,6 +182,9 @@ def _segment_properties(prepared: Prepared, segment: SegmentGranice) -> dict[str
         properties[f"{prefix}_staza_naziv"] = tags.get(way_id or -1, {}).get("name")
         properties[f"{prefix}_staza_kategorija"] = category
         properties[f"{prefix}_od_granice_m"] = _round(border_distance, 1)
+    link = segment.link and transform(prepared.to_wgs84.transform, segment.link)
+    properties["hr_tocka"] = link and _rounded(list(link.coords[0]))
+    properties["bih_tocka"] = link and _rounded(list(link.coords[-1]))
     return properties
 
 

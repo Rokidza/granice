@@ -60,6 +60,7 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 | `udaljenost_m` | zračna udaljenost najbližeg para Staza (samo `kategorije_izracuna`); `null` osim za `procijenjen` |
 | `duljina_m` | duljina segmenta |
 | `rijeka` | vodotok leži između najbližeg para |
+| `na_rijeci` | barem pola segmenta leži na Riječnoj granici (`rijecna_granica.geojson`); stranica ga na zahtjev planera izostavlja iz raspona. Ne ovisi o `max_border_distance_m`, pa ga nema u `pojasevi/` |
 | `izravni_prelazak` | Staza presijeca granicu izvan Službenog prijelaza (`rizik` je 1) |
 | `hr_staza_id`, `hr_staza_naziv`, `hr_staza_kategorija` | najbliža Staza HR Strane (isto `bih_…`) |
 | `hr_od_granice_m`, `bih_od_granice_m` | koliko je kraj najbližeg para na toj Strani udaljen od granične linije; `null` osim za `procijenjen` |
@@ -72,7 +73,7 @@ Jedna datoteka po vrijednosti iz `meta.json` → `pojasevi_m` (npr. `pojasevi/75
 |---|---|
 | `max_border_distance_m` | vrijednost za koju je datoteka izračunata |
 | `broj_segmenata_po_stanju` | brojač po `stanje` |
-| `segmenti` | po jedan objekt za svaki segment, istim redom kao u `segmenti.geojson`: ista svojstva osim `lanac`, `red`, `duljina_m` (ne ovise o vrijednosti), a svojstva s `null` ili `false` su izostavljena |
+| `segmenti` | po jedan objekt za svaki segment, istim redom kao u `segmenti.geojson`: ista svojstva osim `lanac`, `red`, `duljina_m`, `na_rijeci` (ne ovise o vrijednosti), a svojstva s `null` ili `false` su izostavljena |
 | `magla` | GeoJSON geometrija područja dalje od te udaljenosti od granice (pojednostavljena na 10 m); stranica preko nje crta maglu |
 
 ## `rijecna_granica.geojson`

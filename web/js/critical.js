@@ -4,11 +4,12 @@
 
 /**
  * Whether a segment is assessed and its nearest pair of Staze lies within the band, both ends
- * included. `bandFilter` in app.js is the same test as a map expression; keep the two in step.
- * @param {{minM: number, maxM: number}} band
+ * included. With `skipRiver` a segment on Riječna granica (`na_rijeci`) never is. `bandFilter` in app.js is the same test as a map expression; keep the two in step.
+ * @param {{minM: number, maxM: number, skipRiver?: boolean}} band
  */
 export function inBand(p, band) {
-  return p.stanje === "procijenjen" && p.udaljenost_m >= band.minM && p.udaljenost_m <= band.maxM;
+  return p.stanje === "procijenjen" && p.udaljenost_m >= band.minM && p.udaljenost_m <= band.maxM
+    && !(band.skipRiver && p.na_rijeci);
 }
 
 /**
