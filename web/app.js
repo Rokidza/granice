@@ -11,6 +11,7 @@ import {
   SURFACES,
 } from "./js/colors.js";
 import {
+  areaBounds,
   inBand,
   includedStaze,
   kriticnaPodrucja,
@@ -746,8 +747,9 @@ function readSkipRiver() {
 function renderSkipRiver() {
   const button = $("skip-river");
   const detail = $("skip-river-detail");
-  if (!state.segments.some((s) => "na_rijeci" in s.properties)) {
-    button.disabled = true;
+  // applyCorridor copies na_rijeci even when the data has none, so test for a real value.
+  button.disabled = !state.segments.some((s) => typeof s.properties.na_rijeci === "boolean");
+  if (button.disabled) {
     detail.textContent = "Podaci nemaju oznaku rijeke: pokrenite python -m granice compute.";
     return;
   }
@@ -757,7 +759,7 @@ function renderSkipRiver() {
   const noun = onRiver % 10 === 1 && onRiver % 100 !== 11 ? "crveni segment" : few ? "crvena segmenta" : "crvenih segmenata";
   detail.textContent = state.skipRiver
     ? `Uključeno: skriveno ${onRiver} ${noun} na rijeci.`
-    : `Isključeno: ${onRiver} ${noun} u rasponu leži na rijeci.`;
+    : `Isključeno: ${onRiver} ${noun} u rasponu ${few ? "leže" : "leži"} na rijeci.`;
 }
 
 function setupSkipRiver() {
@@ -779,6 +781,7 @@ function recomputeAreas(moved) {
   state.areas = kriticnaPodrucja(state.segments, state.band);
   renderLegend();
   renderAreasSummary();
+  renderAreaList();
   renderSkipRiver();
 }
 
@@ -796,6 +799,37 @@ function renderAreasSummary() {
   } else {
     summary.textContent = "Nema Kritičnih područja u ovom rasponu.";
   }
+}
+
+/** One button per Kritično područje, longest first: a click zooms the map to it. */
+function renderAreaList() {
+  const list = $("areas");
+  list.replaceChildren();
+  state.map.setFilter("segmenti-odabir", ["==", ["get", "id"], ""]);
+  for (const area of state.areas) {
+    const button = element("button", undefined, "area-button");
+    button.type = "button";
+    const pair = area.minDistanceM === area.maxDistanceM
+      ? metres(area.minDistanceM)
+      : `${number(0).format(area.minDistanceM)}–${metres(area.maxDistanceM)}`;
+    const text = element("span", undefined, "area-text");
+    text.append(element("strong", kilometres(area.lengthM)), element("small", `najbliži par ${pair}`));
+    button.append(element("span", String(area.rang), "area-rank"), text);
+    button.setAttribute("aria-label", `Područje ${area.rang}: ${kilometres(area.lengthM)}, najbliži par ${pair}. Zumiraj na kartu.`);
+    button.addEventListener("click", () => showArea(area, button));
+    const item = element("li");
+    item.append(button);
+    list.append(item);
+  }
+}
+
+/** Zooms to a Kritično područje and outlines its segments. */
+function showArea(area, button) {
+  for (const other of document.querySelectorAll(".area-button[aria-current]")) other.removeAttribute("aria-current");
+  button.setAttribute("aria-current", "true");
+  const ids = area.segments.map((s) => s.properties.id);
+  state.map.setFilter("segmenti-odabir", ["in", ["get", "id"], ["literal", ids]]);
+  state.map.fitBounds(areaBounds(area), { padding: 120, maxZoom: 14, duration: 700 });
 }
 
 // ---------------------------------------------------------------------------------------------
