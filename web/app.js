@@ -8,10 +8,12 @@ import {
   DANGER,
   RIVER,
   ROAD_STYLES,
+  SELECTED,
   SURFACES,
 } from "./js/colors.js";
 import {
   areaBounds,
+  crossingLinks,
   inBand,
   includedStaze,
   kriticnaPodrucja,
@@ -33,6 +35,16 @@ const ink = (theme) => (theme === "dark" ? "#f0efec" : "#0b0b0b");
 const absolute = (path) => new URL(path, document.baseURI).href;
 
 const CATEGORY_LABELS = { cesta: "cesta", makadam: "makadam / šumski put", staza: "staza / puteljak" };
+// What kind of road an unnamed Staza of a nearest pair is, from its OSM highway tag.
+const HIGHWAY_LABELS = {
+  trunk: "brza cesta", trunk_link: "brza cesta",
+  primary: "glavna cesta", primary_link: "glavna cesta",
+  secondary: "regionalna cesta", secondary_link: "regionalna cesta",
+  tertiary: "lokalna cesta", tertiary_link: "lokalna cesta",
+  unclassified: "nerazvrstana cesta",
+  residential: "ulica u naselju", living_street: "ulica u naselju",
+  service: "pristupna cesta",
+};
 // Drawn bottom to top, so roads cross over tracks and paths. `casing` is the extra width of the
 // outline under the line.
 const CATEGORIES = ["staza", "makadam", "cesta"];
@@ -51,6 +63,11 @@ const SEGMENT_LAYERS = [
   "segmenti-sporna",
   "segmenti-prijelaz",
 ];
+const METRES_PER_DEGREE = 111320;
+const WALKING_M_PER_MINUTE = 4000 / 60; // about 4 km/h off-road, so the minutes are a lower bound
+const NO_ID = ["==", ["get", "id"], -1];
+const NO_SELECTION = ["==", ["get", "id"], ""];
+
 const state = {
   map: null,
   meta: null,
@@ -63,6 +80,11 @@ const state = {
   areas: [],
   band: { ...CONFIG.band }, // nearest-pair distances (m) drawn red and grouped into Kritična područja
   included: { HR: new Map(), BiH: new Map() }, // Staze of those nearest pairs (includedStaze)
+  linkBySegment: new Map(), // segment id → its walking link (crossingLinks), for red segments
+  stazaById: new Map(), // "<strana>:<OSM way id>" → properties of the Staza, for names of the pairs
+  pairSegment: null, // id of the red segment whose pair is highlighted (hovered or of the chosen area)
+  selectedPair: null, // the segment of the chosen Kritično područje whose pair stays highlighted
+  pairLabels: [], // markers naming the two roads and the gap of the highlighted pair
   hasLocalBasemap: false,
   hasGlyphs: false,
   basemaps: [],
@@ -215,6 +237,12 @@ function themedPaint(theme) {
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
     "staze-ukljucene": { "line-color": DANGER[theme] },
+    "staze-par": { "line-color": DANGER[theme] },
+    "par-odabir": { "line-color": DANGER[theme] },
+    "parovi-casing": { "line-color": SURFACES[theme] },
+    "parovi-linija": { "line-color": DANGER[theme] },
+    "parovi-tocke": { "circle-color": DANGER[theme], "circle-stroke-color": SURFACES[theme] },
+    "par-veza": { "line-color": ink(theme) },
     "segmenti-casing": { "line-color": CASING[theme] },
     "segmenti-raspon": { "line-color": DANGER[theme] },
     "rijecna-granica": { "line-color": RIVER[theme] },
@@ -224,7 +252,8 @@ function themedPaint(theme) {
     "mjerenje-tocke": { "circle-color": ink(theme), "circle-stroke-color": SURFACES[theme] },
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
-    "segmenti-odabir": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
+    "segmenti-odabir-casing": { "line-color": CASING[theme] },
+    "segmenti-odabir": { "line-color": SELECTED[theme] },
   };
   for (const category of CATEGORIES) {
     const { fill, casing } = ROAD_STYLES[theme][category];
@@ -242,6 +271,10 @@ function dataLayers(theme) {
     { id: "staze-ukljucene", type: "line", source: "staze", filter: includedFilter(state.included),
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { ...colors["staze-ukljucene"], "line-width": roadScaled(13), "line-opacity": 0.35 } },
+    // The two Staze of the pair of the red segment under the mouse, a stronger red.
+    { id: "staze-par", type: "line", source: "staze", filter: NO_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colors["staze-par"], "line-width": roadScaled(15), "line-opacity": 0.7 } },
   ];
   for (const category of CATEGORIES) {
     const style = CATEGORY_STYLE[category];
@@ -291,12 +324,15 @@ function dataLayers(theme) {
       paint: { ...colors["segmenti-sporna"], "line-width": zoomScaled(3), "line-dasharray": [2, 2] } },
     { id: "segmenti-prijelaz", type: "line", source: "segmenti", filter: stanjeIs("sluzbeni_prijelaz"),
       paint: { ...colors["segmenti-prijelaz"], "line-width": zoomScaled(4) } },
-    { id: "segmenti-odabir", type: "line", source: "segmenti", filter: ["==", ["get", "id"], ""],
-      paint: { ...colors["segmenti-odabir"], "line-width": zoomScaled(16), "line-opacity": 0.45 } },
     { id: "granica-casing", type: "line", source: "granica",
       paint: { ...colors["granica-casing"], "line-width": 3.4, "line-opacity": 0.85 } },
     { id: "granica", type: "line", source: "granica",
       paint: { ...colors.granica, "line-width": 1.6, "line-dasharray": [5, 2, 1.2, 2] } },
+    // The selected segments, bright yellow over the Granična linija so there is no doubt which.
+    { id: "segmenti-odabir-casing", type: "line", source: "segmenti", filter: NO_SELECTION,
+      layout: { "line-cap": "round" }, paint: { ...colors["segmenti-odabir-casing"], "line-width": zoomScaled(12) } },
+    { id: "segmenti-odabir", type: "line", source: "segmenti", filter: NO_SELECTION,
+      layout: { "line-cap": "round" }, paint: { ...colors["segmenti-odabir"], "line-width": zoomScaled(8) } },
     { id: "prijelazi-sluzbeni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "sluzbeni_prijelaz"],
       layout: { "icon-image": "ikona-prijelaz", "icon-allow-overlap": true,
@@ -305,6 +341,21 @@ function dataLayers(theme) {
       filter: ["==", ["get", "tip"], "izravni_prelazak"],
       layout: { "icon-image": "ikona-izravni", "icon-allow-overlap": true,
         "icon-size": ICON_SIZE } },
+    // Walking links of the nearest pairs: from the BiH road across the border to the HR road. The
+    // one of the hovered red segment is underlaid in red and tied to the segment by a dotted line.
+    { id: "par-odabir", type: "line", source: "par-hover", filter: ["==", ["get", "vrsta"], "par"],
+      layout: { "line-cap": "round" },
+      paint: { ...colors["par-odabir"], "line-width": zoomScaled(12), "line-opacity": 0.35 } },
+    { id: "parovi-casing", type: "line", source: "parovi", filter: ["==", ["geometry-type"], "LineString"],
+      layout: { "line-cap": "round" }, paint: { ...colors["parovi-casing"], "line-width": zoomScaled(4.5) } },
+    { id: "parovi-linija", type: "line", source: "parovi", filter: ["==", ["geometry-type"], "LineString"],
+      paint: { ...colors["parovi-linija"], "line-width": zoomScaled(2.2), "line-dasharray": [2, 1.5] } },
+    { id: "parovi-tocke", type: "circle", source: "parovi", filter: ["==", ["geometry-type"], "Point"],
+      paint: { ...colors["parovi-tocke"], "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 2.5, 14, 6],
+        "circle-stroke-width": 1.5 } },
+    { id: "par-veza", type: "line", source: "par-hover", filter: ["==", ["get", "vrsta"], "veza"],
+      layout: { "line-cap": "round" },
+      paint: { ...colors["par-veza"], "line-width": 1.6, "line-dasharray": [0.5, 2.5] } },
     // The measuring tool, above everything.
     { id: "mjerenje-casing", type: "line", source: "mjerenje", filter: ["==", ["geometry-type"], "LineString"],
       layout: { "line-cap": "round" }, paint: { ...colors["mjerenje-casing"], "line-width": 6 } },
@@ -320,7 +371,12 @@ const LAYER_GROUPS = [
   { id: "cesta", label: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
   { id: "staza", label: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
-  { id: "ukljucene", label: "Ceste uključene u izračun (crveni obrub)", layers: ["staze-ukljucene"] },
+  { id: "ukljucene", label: "Ceste uključene u izračun (crveni obrub)", layers: ["staze-ukljucene", "staze-par"] },
+  {
+    id: "parovi", label: "Pješački prijelazi najbližih parova (crtkano)",
+    layers: ["par-odabir", "parovi-casing", "parovi-linija", "parovi-tocke", "par-veza"],
+    onChange: (visible) => $("map").classList.toggle("hide-pair-labels", !visible),
+  },
   { id: "granica", label: "Granična linija", layers: ["granica-casing", "granica"] },
   { id: "rijeka", label: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   { id: "magla", label: "Magla izvan pojasa cesta", layers: ["pojas-magla"] },
@@ -328,7 +384,7 @@ const LAYER_GROUPS = [
     id: "segmenti", label: "Segmenti granice u rasponu i stanja",
     layers: [
       "segmenti-casing", "segmenti-raspon", "segmenti-izvan", "segmenti-nedovoljno", "segmenti-sporna",
-      "segmenti-prijelaz", "segmenti-odabir", "prijelazi-izravni",
+      "segmenti-prijelaz", "segmenti-odabir-casing", "segmenti-odabir", "prijelazi-izravni",
     ],
   },
   { id: "prijelazi", label: "Službeni prijelazi", layers: ["prijelazi-sluzbeni"] },
@@ -601,6 +657,17 @@ function renderLegend() {
       ),
       legendRow(
         sample((svg) => {
+          sampleLine(svg, SURFACES[theme], 4.5);
+          sampleLine(svg, DANGER[theme], 2.2, { dash: "4 3" });
+          for (const cx of [4, 30]) {
+            svg.append(svgElement("circle", { cx, cy: 9, r: 3.5, fill: DANGER[theme], stroke: SURFACES[theme], "stroke-width": 1.5 }));
+          }
+        }),
+        "Pješački prijelaz",
+        "Najkraći put pješice od BiH ceste do HR ceste: zbog njega je segment crven. Prijeđite mišem preko crvenog segmenta za objašnjenje.",
+      ),
+      legendRow(
+        sample((svg) => {
           sampleLine(svg, RIVER[theme], 12, { opacity: 0.9 });
           sampleLine(svg, BORDER_COLORS[theme].line, 2.2, { dash: "7 3 2 3" });
         }),
@@ -778,11 +845,117 @@ function recomputeAreas(moved) {
   for (const [layerId, filter] of Object.entries(bandFilters(state.band))) state.map.setFilter(layerId, filter);
   state.included = includedStaze(state.segments, state.band);
   state.map.setFilter("staze-ukljucene", includedFilter(state.included));
+  state.selectedPair = null; // the list of areas is rebuilt, so nothing is chosen
+  renderLinks();
   state.areas = kriticnaPodrucja(state.segments, state.band);
   renderLegend();
   renderAreasSummary();
   renderAreaList();
   renderSkipRiver();
+}
+
+/** The walking links of the red segments, each with a dot on its BiH and its HR end. */
+function renderLinks() {
+  const links = crossingLinks(state.segments, state.band);
+  state.linkBySegment = new Map(links.flatMap((link) => link.segmentIds.map((id) => [id, link])));
+  state.map.getSource("parovi").setData({
+    type: "FeatureCollection",
+    features: links.flatMap((link) => [
+      { type: "Feature", geometry: { type: "LineString", coordinates: [link.bih, link.hr] }, properties: { udaljenost_m: link.distanceM } },
+      { type: "Feature", geometry: { type: "Point", coordinates: link.bih }, properties: { strana: "BiH" } },
+      { type: "Feature", geometry: { type: "Point", coordinates: link.hr }, properties: { strana: "HR" } },
+    ]),
+  });
+  highlightPair(null);
+}
+
+/** The point of a line nearest to `target`, in a flat projection around it (fine over a few km). */
+function nearestOnLine(coords, target) {
+  const kx = METRES_PER_DEGREE * Math.cos((target[1] * Math.PI) / 180);
+  const ky = METRES_PER_DEGREE;
+  let best = coords[0];
+  let bestDistance = Infinity;
+  for (let i = 0; i + 1 < coords.length; i++) {
+    const [ax, ay] = [(coords[i][0] - target[0]) * kx, (coords[i][1] - target[1]) * ky];
+    const [dx, dy] = [(coords[i + 1][0] - coords[i][0]) * kx, (coords[i + 1][1] - coords[i][1]) * ky];
+    const lengthSquared = dx * dx + dy * dy;
+    const t = lengthSquared ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared)) : 0;
+    const distance = Math.hypot(ax + t * dx, ay + t * dy);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = [coords[i][0] + (t * dx) / kx, coords[i][1] + (t * dy) / ky];
+    }
+  }
+  return best;
+}
+
+/** Where a red segment's walking link lies relative to the segment: its middle, the nearest point
+ * of the segment to it and the distance between the two. */
+function linkPlacement(segment, link) {
+  const middle = [(link.hr[0] + link.bih[0]) / 2, (link.hr[1] + link.bih[1]) / 2];
+  const onSegment = nearestOnLine(segment.geometry.coordinates, middle);
+  return { middle, onSegment, distanceM: geodesicDistance(onSegment, middle) };
+}
+
+// A link closer than this to its segment needs no dotted line or mention of where it lies.
+const LINK_NEARBY_M = 300;
+
+// Where a label at one end of a pair goes relative to its point, by the anchor MapLibre places there.
+const LABEL_OFFSETS = { right: [-9, 0], left: [9, 0], bottom: [0, -9], top: [0, 9] };
+
+/** Labels on the map for a highlighted pair: "BiH cesta" and "HR cesta" at the two ends, each on the
+ * far side from the other end so it does not cover the link, and the gap over the middle. */
+function drawPairLabels(segment, link) {
+  for (const marker of state.pairLabels) marker.remove();
+  state.pairLabels = [];
+  if (!link) return;
+  const p = segment.properties;
+  const lat = (link.hr[1] + link.bih[1]) / 2;
+  const dx = (link.hr[0] - link.bih[0]) * Math.cos((lat * Math.PI) / 180);
+  const dy = link.bih[1] - link.hr[1]; // screen y grows downwards
+  const [bihAnchor, hrAnchor] = Math.abs(dx) > Math.abs(dy)
+    ? (dx > 0 ? ["right", "left"] : ["left", "right"])
+    : (dy > 0 ? ["bottom", "top"] : ["top", "bottom"]);
+  const end = (strana, prefix, at, anchor) => {
+    const label = element("div", undefined, "pair-label");
+    label.append(element("strong", `${strana} cesta`), element("small", `${metres(p[`${prefix}_od_granice_m`])} od granice`));
+    return new globalThis.maplibregl.Marker({ element: label, anchor, offset: LABEL_OFFSETS[anchor] }).setLngLat(at);
+  };
+  const middle = [(link.hr[0] + link.bih[0]) / 2, (link.hr[1] + link.bih[1]) / 2];
+  state.pairLabels = [
+    end("BiH", "bih", link.bih, bihAnchor),
+    end("HR", "hr", link.hr, hrAnchor),
+    new globalThis.maplibregl.Marker({ element: element("div", metres(p.udaljenost_m), "pair-label pair-gap"), anchor: "center" })
+      .setLngLat(middle),
+  ];
+  for (const marker of state.pairLabels) marker.addTo(state.map);
+}
+
+/** Highlights the pair of a red segment: its two roads, its walking link, labels naming both ends
+ * and a dotted line from the segment to the link. `null` goes back to the pair of the chosen
+ * Kritično područje, or clears it when none is chosen. */
+function highlightPair(hovered) {
+  const segment = hovered ?? state.selectedPair;
+  const id = segment?.properties.id ?? null;
+  if (id === state.pairSegment) return;
+  state.pairSegment = id;
+  const { map } = state;
+  const link = segment && state.linkBySegment.get(id);
+  drawPairLabels(segment, link);
+  const features = [];
+  if (link) {
+    features.push({ type: "Feature", geometry: { type: "LineString", coordinates: [link.bih, link.hr] }, properties: { vrsta: "par" } });
+    const { middle, onSegment, distanceM } = linkPlacement(segment, link);
+    if (distanceM >= LINK_NEARBY_M) {
+      features.push({ type: "Feature", geometry: { type: "LineString", coordinates: [onSegment, middle] }, properties: { vrsta: "veza" } });
+    }
+  }
+  map.getSource("par-hover").setData({ type: "FeatureCollection", features });
+  const p = segment?.properties;
+  map.setFilter("staze-par", p?.hr_staza_id == null ? NO_ID : ["any",
+    ["all", ["==", ["get", "strana"], "HR"], ["==", ["get", "id"], p.hr_staza_id]],
+    ["all", ["==", ["get", "strana"], "BiH"], ["==", ["get", "id"], p.bih_staza_id]],
+  ]);
 }
 
 /** How many Kritična područja the band gives and how long they are in total. */
@@ -801,7 +974,12 @@ function renderAreasSummary() {
   }
 }
 
-/** One button per Kritično područje, longest first: a click zooms the map to it. */
+/** The segment of an area with the closest pair: the pair named in the list and kept highlighted. */
+const closestPairSegment = (area) =>
+  area.segments.reduce((best, s) => (s.properties.udaljenost_m < best.properties.udaljenost_m ? s : best));
+
+/** One button per Kritično područje, longest first, naming the pair of roads that makes it red:
+ * a click flies the map to it. */
 function renderAreaList() {
   const list = $("areas");
   list.replaceChildren();
@@ -809,13 +987,17 @@ function renderAreaList() {
   for (const area of state.areas) {
     const button = element("button", undefined, "area-button");
     button.type = "button";
-    const pair = area.minDistanceM === area.maxDistanceM
-      ? metres(area.minDistanceM)
-      : `${number(0).format(area.minDistanceM)}–${metres(area.maxDistanceM)}`;
+    const p = closestPairSegment(area).properties;
+    const others = crossingLinks(area.segments, state.band).length - 1;
+    const roads = p.izravni_prelazak
+      ? "cesta prelazi granicu"
+      : `BiH ${roadName(p, "bih")} ↔ HR ${roadName(p, "hr")}${others > 0 ? ` (+${others} ${others === 1 ? "par" : "para"})` : ""}`;
     const text = element("span", undefined, "area-text");
-    text.append(element("strong", kilometres(area.lengthM)), element("small", `najbliži par ${pair}`));
+    const head = element("span", undefined, "area-head");
+    head.append(element("strong", `par cesta ${metres(p.udaljenost_m)}`), element("span", ` · ${kilometres(area.lengthM)} granice`));
+    text.append(head, element("small", roads));
     button.append(element("span", String(area.rang), "area-rank"), text);
-    button.setAttribute("aria-label", `Područje ${area.rang}: ${kilometres(area.lengthM)}, najbliži par ${pair}. Zumiraj na kartu.`);
+    button.setAttribute("aria-label", `Područje ${area.rang}: par cesta na ${metres(p.udaljenost_m)}, ${roads}, ${kilometres(area.lengthM)} granice. Prikaži na karti.`);
     button.addEventListener("click", () => showArea(area, button));
     const item = element("li");
     item.append(button);
@@ -823,13 +1005,22 @@ function renderAreaList() {
   }
 }
 
-/** Zooms to a Kritično područje and outlines its segments. */
+/** Flies the map to a Kritično područje, framing its segments together with both ends of their
+ * pairs, outlines the segments and keeps the closest pair highlighted until another choice. */
 function showArea(area, button) {
+  const { map } = state;
   for (const other of document.querySelectorAll(".area-button[aria-current]")) other.removeAttribute("aria-current");
   button.setAttribute("aria-current", "true");
   const ids = area.segments.map((s) => s.properties.id);
-  state.map.setFilter("segmenti-odabir", ["in", ["get", "id"], ["literal", ids]]);
-  state.map.fitBounds(areaBounds(area), { padding: 120, maxZoom: 14, duration: 700 });
+  map.setFilter("segmenti-odabir", ["in", ["get", "id"], ["literal", ids]]);
+  state.selectedPair = closestPairSegment(area);
+  highlightPair(null);
+  // Room for the labels at the ends of the pair and the controls in the map's corners.
+  const { width, height } = map.getContainer().getBoundingClientRect();
+  const side = Math.min(150, width * 0.2);
+  const padding = { top: Math.min(110, height * 0.2), bottom: Math.min(80, height * 0.15), left: side, right: side };
+  // Not linear: MapLibre flies out and back in, so a far area is reached with a sense of where it is.
+  map.fitBounds(areaBounds(area, { withPairs: true }), { padding, maxZoom: 15, speed: 1.4, maxDuration: 2500 });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -902,23 +1093,88 @@ function includedTooltip(p) {
   return root;
 }
 
+/** Name of a Staza of a nearest pair: its OSM name, else the kind of road it is. The Staze layer is
+ * the source, because the per-corridor files (pojasevi/) carry no names. */
+function roadName(p, prefix) {
+  const staza = state.stazaById.get(`${prefix === "hr" ? "HR" : "BiH"}:${p[`${prefix}_staza_id`]}`);
+  const name = staza?.naziv ?? p[`${prefix}_staza_naziv`];
+  if (name) return `„${name}”`;
+  return `${HIGHWAY_LABELS[staza?.highway] ?? "cesta"} bez naziva`;
+}
+
+/** The tooltip on a red segment: the pair of roads that makes it red, one per Strana, and how far
+ * apart they are, matching the labels at the two ends of the pair on the map. */
+function whyRedTooltip(segment) {
+  const p = segment.properties;
+  const root = element("div", undefined, "popup why");
+  if (p.izravni_prelazak) {
+    root.append(
+      element("strong", "Cesta ovdje prelazi granicu"),
+      element("p", "Izvan Službenog prijelaza: granica se prelazi bez silaska s ceste, vozilom ili pješice. Najviši rizik."),
+    );
+    return root;
+  }
+  const minutes = Math.max(1, Math.round(p.udaljenost_m / WALKING_M_PER_MINUTE));
+  root.append(
+    element("strong", `Crveno zbog para cesta udaljenih ${metres(p.udaljenost_m)}`),
+    element("p", `To je u odabranom rasponu ${bandText(state.band)}.`, "muted"),
+  );
+  const pair = element("dl", undefined, "pair");
+  for (const [strana, prefix] of [["BiH", "bih"], ["HR", "hr"]]) {
+    pair.append(
+      element("dt", `${strana} cesta`),
+      element("dd", `${roadName(p, prefix)}, ${metres(p[`${prefix}_od_granice_m`])} od granice`),
+    );
+  }
+  root.append(pair, element("p", `Crtkano na karti: pješice od jedne do druge ceste, ${metres(p.udaljenost_m)} zračne linije, najmanje oko ${minutes} min hoda.`));
+  const link = state.linkBySegment.get(p.id);
+  if (link) {
+    const { distanceM } = linkPlacement(segment, link);
+    if (distanceM >= LINK_NEARBY_M) {
+      root.append(element("p", `Par je ${kilometres(distanceM)} od ovog dijela granice: prati točkastu crtu.`));
+    }
+    const n = link.segmentIds.length;
+    if (n > 1) {
+      const few = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14);
+      root.append(element("p", `Isti par cesta boji ${n} ${n % 10 === 1 && n % 100 !== 11 ? "crveni segment" : few ? "crvena segmenta" : "crvenih segmenata"}.`, "muted"));
+    }
+  }
+  if (p.rijeka) root.append(element("p", "Između cesta je vodotok, pa je prelazak teži."));
+  return root;
+}
+
 function riverTooltip() {
   const root = element("div", undefined, "popup");
   root.append(element("strong", "Granica na rijeci"));
   return root;
 }
 
-/** Tooltips that follow the mouse over a layer, one at a time. */
+/** Tooltips that follow the mouse, one at a time: a red segment first, then a road of a nearest
+ * pair, then Riječna granica. Over a red segment its pair is highlighted too. */
 function setupHover() {
   const { map } = state;
-  const tooltip = new globalThis.maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "280px" });
-  for (const [layer, content] of [["staze-ukljucene", includedTooltip], ["rijecna-granica", riverTooltip]]) {
-    map.on("mousemove", layer, (event) => {
-      const root = content(event.features[0].properties);
-      if (root) tooltip.setLngLat(event.lngLat).setDOMContent(root).addTo(map);
-    });
-    map.on("mouseleave", layer, () => tooltip.remove());
-  }
+  const tooltip = new globalThis.maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "300px" });
+  const hit = (point, layer) => map.getLayoutProperty(layer, "visibility") !== "none"
+    && map.queryRenderedFeatures(point, { layers: [layer] })[0];
+  map.on("mousemove", (event) => {
+    // A few pixels of slack: the red line is only about 5 px wide with the whole border in view.
+    const { x, y } = event.point;
+    const red = hit([[x - 4, y - 4], [x + 4, y + 4]], "segmenti-raspon");
+    const segment = red ? state.segments.find((s) => s.properties.id === red.properties.id) : null;
+    highlightPair(segment);
+    let content = segment ? whyRedTooltip(segment) : null;
+    if (!content) {
+      const road = hit(event.point, "staze-ukljucene");
+      content = road ? includedTooltip(road.properties) : null;
+    }
+    if (!content && hit(event.point, "rijecna-granica")) content = riverTooltip();
+    if (content) tooltip.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
+    else tooltip.remove();
+  });
+  map.getCanvas().addEventListener("mouseleave", () => {
+    tooltip.remove();
+    highlightPair(null);
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1009,6 +1265,10 @@ function setupClicks() {
     if (!hits.length) {
       popup?.remove();
       map.setFilter("segmenti-odabir", ["==", ["get", "id"], ""]);
+      // Leaves the chosen Kritično područje too, with the highlight of its pair.
+      for (const button of document.querySelectorAll(".area-button[aria-current]")) button.removeAttribute("aria-current");
+      state.selectedPair = null;
+      highlightPair(null);
       return;
     }
     const { properties } = hits[0];
@@ -1055,6 +1315,7 @@ async function start() {
   }
   state.meta = data.meta;
   state.segments = data.segmenti.features;
+  state.stazaById = new Map(data.staze.features.map(({ properties: p }) => [`${p.strana}:${p.id}`, p]));
   state.corridorM = data.meta.parametri.max_border_distance_m; // segmenti.geojson is computed for it
   state.skipRiver = readSkipRiver();
   let firstCorridor = null;
@@ -1114,6 +1375,8 @@ async function start() {
     map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
     map.addSource("magla", { type: "geojson", data: firstCorridor ? fogData(firstCorridor) : empty });
     map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
+    map.addSource("parovi", { type: "geojson", data: empty });
+    map.addSource("par-hover", { type: "geojson", data: empty });
     map.addSource("mjerenje", { type: "geojson", data: empty });
     for (const layer of dataLayers(theme)) map.addLayer(layer);
 

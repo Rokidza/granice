@@ -8,7 +8,7 @@ Promjena oblika podataka podiže `schema` u `meta.json`.
 
 | ključ | značenje |
 |---|---|
-| `schema` | verzija ugovora (trenutno 6) |
+| `schema` | verzija ugovora (trenutno 7) |
 | `osm_podaci_od` | vrijeme OSM podataka (ISO 8601), prikazuje se kao „OSM podaci od: …" |
 | `generirano` | vrijeme izračuna |
 | `podrucje` | `cijela` (cijela granica HR–BiH) \| `pilot` (samo Pilot odsječak) |
@@ -64,6 +64,7 @@ Indeks: `1` za `d ≤ near`, `0` za `d ≥ far`, između linearno po `ln(d)`. Oz
 | `izravni_prelazak` | Staza presijeca granicu izvan Službenog prijelaza (`rizik` je 1) |
 | `hr_staza_id`, `hr_staza_naziv`, `hr_staza_kategorija` | najbliža Staza HR Strane (isto `bih_…`) |
 | `hr_od_granice_m`, `bih_od_granice_m` | koliko je kraj najbližeg para na toj Strani udaljen od granične linije; `null` osim za `procijenjen` |
+| `hr_tocka`, `bih_tocka` | `[lon, lat]` krajeva najbližeg para (na HR i na BiH Stazi): spojnica između njih je pješački prijelaz koji segment čini rizičnim i ne mora ležati uz sam segment; `null` osim za `procijenjen` bez Izravnog prelaska |
 
 ## `pojasevi/<m>.json`
 

@@ -32,6 +32,24 @@ export function includedStaze(segments, band) {
 }
 
 /**
+ * The walking links of the nearest pairs within the band: where one would cross the border on foot
+ * from the BiH road to the HR road. Adjacent segments often share a pair, so each link comes once,
+ * with the ids of the segments it makes red.
+ * @returns {{hr: number[], bih: number[], distanceM: number, segmentIds: string[]}[]}
+ */
+export function crossingLinks(segments, band) {
+  const links = new Map();
+  for (const { properties: p } of segments) {
+    if (!inBand(p, band) || !p.hr_tocka || !p.bih_tocka) continue;
+    const key = `${p.hr_tocka}|${p.bih_tocka}`;
+    const link = links.get(key) ?? { hr: p.hr_tocka, bih: p.bih_tocka, distanceM: p.udaljenost_m, segmentIds: [] };
+    link.segmentIds.push(p.id);
+    links.set(key, link);
+  }
+  return [...links.values()];
+}
+
+/**
  * Runs of adjacent segments within the band, longest first and then by the closest pair.
  * @param {object[]} segments GeoJSON features from segmenti.geojson
  */
@@ -68,9 +86,15 @@ export function kriticnaPodrucja(segments, band) {
   return areas.map((area, i) => ({ rang: i + 1, ...area }));
 }
 
-/** Bounding box [[west, south], [east, north]] of an area. */
-export function areaBounds(area) {
-  const coords = area.segments.flatMap((s) => s.geometry.coordinates);
+/**
+ * Bounding box [[west, south], [east, north]] of an area. With `withPairs` it also holds both ends
+ * of the nearest pair of each segment, which can lie a few km along the border from the segment.
+ */
+export function areaBounds(area, { withPairs = false } = {}) {
+  const coords = area.segments.flatMap((s) => [
+    ...s.geometry.coordinates,
+    ...(withPairs ? [s.properties.hr_tocka, s.properties.bih_tocka].filter(Boolean) : []),
+  ]);
   const lons = coords.map((c) => c[0]);
   const lats = coords.map((c) => c[1]);
   return [
