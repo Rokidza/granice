@@ -18,6 +18,7 @@ import {
   includedStaze,
   kriticnaPodrucja,
 } from "./js/critical.js";
+import { geodesicDistance } from "./js/geodesy.js";
 
 const $ = (id) => document.getElementById(id);
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -60,6 +61,7 @@ const state = {
   corridorM: null, // roads up to this far from the border count (max_border_distance_m)
   corridorFiles: new Map(), // pojasevi/<m>.json requests by value
   corridorRequest: 0, // bumped per choice, so a slow file cannot land after a newer choice
+  measure: { active: false, points: [], label: null }, // the measuring tool: up to two [lon, lat]
   areas: [],
   selectedArea: null,
   band: { ...CONFIG.band }, // nearest-pair distances (m) drawn red and grouped into Kritična područja
@@ -232,6 +234,9 @@ function themedPaint(theme) {
     "segmenti-raspon": { "line-color": DANGER[theme] },
     "rijecna-granica": { "line-color": RIVER[theme] },
     "pojas-magla": { "fill-color": SURFACES[theme] },
+    "mjerenje-casing": { "line-color": SURFACES[theme] },
+    "mjerenje-linija": { "line-color": ink(theme) },
+    "mjerenje-tocke": { "circle-color": ink(theme), "circle-stroke-color": SURFACES[theme] },
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
     "segmenti-odabir": { "line-color": theme === "dark" ? "#86b6ef" : "#184f95" },
@@ -325,6 +330,13 @@ function dataLayers(theme, latitude) {
       paint: { ...colors["podrucja-krug"], "circle-radius": circleRadius(latitude),
         "circle-opacity": ["case", ["get", "odabrano"], 0.12, 0.04],
         "circle-stroke-width": 3, "circle-stroke-opacity": 1, "circle-pitch-alignment": "map" } },
+    // The measuring tool, above everything.
+    { id: "mjerenje-casing", type: "line", source: "mjerenje", filter: ["==", ["geometry-type"], "LineString"],
+      layout: { "line-cap": "round" }, paint: { ...colors["mjerenje-casing"], "line-width": 6 } },
+    { id: "mjerenje-linija", type: "line", source: "mjerenje", filter: ["==", ["geometry-type"], "LineString"],
+      layout: { "line-cap": "round" }, paint: { ...colors["mjerenje-linija"], "line-width": 2.5 } },
+    { id: "mjerenje-tocke", type: "circle", source: "mjerenje", filter: ["==", ["geometry-type"], "Point"],
+      paint: { ...colors["mjerenje-tocke"], "circle-radius": 5, "circle-stroke-width": 2 } },
   );
   return layers;
 }
@@ -978,6 +990,73 @@ function setupHover() {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Measuring tool: click two points, the air distance between them is written above the line.
+
+const measureText = (metresApart) => metresApart >= 1000
+  ? `${metres(metresApart)} (${number(2).format(metresApart / 1000)} km)`
+  : metres(metresApart);
+
+/** Draws the points, the line and its distance label. `points` may end with the mouse position. */
+function drawMeasure(points) {
+  const { map, measure } = state;
+  const features = points.map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: p }, properties: {} }));
+  measure.label?.remove();
+  measure.label = null;
+  if (points.length === 2) {
+    features.push({ type: "Feature", geometry: { type: "LineString", coordinates: points }, properties: {} });
+    const label = element("div", measureText(geodesicDistance(points[0], points[1])), "measure-label");
+    const middle = [(points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2];
+    measure.label = new globalThis.maplibregl.Marker({ element: label, anchor: "bottom", offset: [0, -8] })
+      .setLngLat(middle)
+      .addTo(map);
+  }
+  map.getSource("mjerenje")?.setData({ type: "FeatureCollection", features });
+}
+
+function measureHint() {
+  const { active, points } = state.measure;
+  if (!active) return "";
+  if (points.length === 1) return "Kliknite drugu točku.";
+  if (points.length === 2) return "Klik na kartu započinje novo mjerenje. Esc ili gumb Mjerenje za kraj.";
+  return "Kliknite prvu točku.";
+}
+
+function setMeasuring(active) {
+  const { map, measure } = state;
+  measure.active = active;
+  measure.points = [];
+  drawMeasure([]);
+  const button = $("measure-toggle");
+  button.setAttribute("aria-pressed", String(active));
+  $("measure-hint").textContent = measureHint();
+  map.getCanvas().style.cursor = active ? "crosshair" : "";
+  // A quick second click would zoom in instead of setting the second point.
+  if (active) map.doubleClickZoom.disable();
+  else map.doubleClickZoom.enable();
+}
+
+function setupMeasure() {
+  const { map, measure } = state;
+  $("measure-toggle").addEventListener("click", () => setMeasuring(!measure.active));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && measure.active) setMeasuring(false);
+  });
+  map.on("click", (event) => {
+    if (!measure.active) return;
+    const point = [event.lngLat.lng, event.lngLat.lat];
+    measure.points = measure.points.length === 1 ? [measure.points[0], point] : [point];
+    drawMeasure(measure.points);
+    $("measure-hint").textContent = measureHint();
+  });
+  // Between the two clicks the line follows the mouse with its distance.
+  map.on("mousemove", (event) => {
+    if (measure.active && measure.points.length === 1) {
+      drawMeasure([measure.points[0], [event.lngLat.lng, event.lngLat.lat]]);
+    }
+  });
+}
+
 function setupClicks() {
   const { map } = state;
   let popup = null;
@@ -986,6 +1065,7 @@ function setupClicks() {
     popup = new globalThis.maplibregl.Popup({ maxWidth: "340px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
   };
   map.on("click", (event) => {
+    if (state.measure.active) return; // clicks set measuring points instead
     const box = [[event.point.x - 7, event.point.y - 7], [event.point.x + 7, event.point.y + 7]];
     const icons = map.queryRenderedFeatures(box, { layers: ["prijelazi-sluzbeni"] });
     if (icons.length) {
@@ -1005,6 +1085,7 @@ function setupClicks() {
     open(event.lngLat, segmentPopup(properties));
   });
   map.on("mousemove", (event) => {
+    if (state.measure.active) return; // the cursor stays a crosshair
     const box = [[event.point.x - 6, event.point.y - 6], [event.point.x + 6, event.point.y + 6]];
     const layers = [...SEGMENT_LAYERS, "prijelazi-sluzbeni"].filter((id) => map.getLayoutProperty(id, "visibility") !== "none");
     map.getCanvas().style.cursor = map.queryRenderedFeatures(box, { layers }).length ? "pointer" : "";
@@ -1104,6 +1185,7 @@ async function start() {
     map.addSource("magla", { type: "geojson", data: firstCorridor ? fogData(firstCorridor) : empty });
     map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
     map.addSource("podrucja", { type: "geojson", data: empty });
+    map.addSource("mjerenje", { type: "geojson", data: empty });
     for (const layer of dataLayers(theme, latitude)) map.addLayer(layer);
 
     renderToggles();
@@ -1111,6 +1193,7 @@ async function start() {
     showBasemap(state.basemap);
     setupClicks();
     setupHover();
+    setupMeasure();
     setupExport();
     setupCorridorInput(firstCorridor !== null);
     recomputeAreas();

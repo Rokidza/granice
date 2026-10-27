@@ -73,7 +73,14 @@
     <main>
       <div id="map" role="application" aria-label="Karta Staza i rizika prelaska"></div>
       <div class="map-tools">
-        <div id="basemap-choice" class="segmented" role="radiogroup" aria-label="Podloga karte"></div>
+        <div class="tool-row">
+          <div id="basemap-choice" class="segmented" role="radiogroup" aria-label="Podloga karte"></div>
+          <button type="button" id="measure-toggle" class="tool-button" aria-pressed="false" title="Zračna udaljenost između dvije točke">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 10.5l9-9 4 4-9 9z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5 6l1.5 1.5M7 4l1 1M9 2l1.5 1.5M3 8l1 1" stroke="currentColor" stroke-width="1.2"/></svg>
+            Mjerenje
+          </button>
+        </div>
+        <p id="measure-hint" class="map-hint" role="status"></p>
         <p id="basemap-status" class="map-status" role="status"></p>
       </div>
       <p id="error" class="error" role="alert" hidden></p>

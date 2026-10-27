@@ -176,6 +176,25 @@ main { flex: 1; position: relative; min-width: 0; }
 .segmented label:hover span { background: var(--raised); }
 .segmented input:checked + span { background: var(--ink); color: var(--surface); }
 .segmented input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tool-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tool-button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font: inherit; font-weight: 600;
+  color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: var(--shadow); cursor: pointer;
+}
+.tool-button:hover { background: var(--raised); }
+.tool-button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.tool-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.map-hint {
+  margin: 0; padding: 4px 10px; border-radius: 7px; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 12px;
+}
+.map-hint:empty { display: none; }
+.measure-label {
+  padding: 3px 8px; border-radius: 6px; background: var(--ink); color: var(--surface);
+  font-weight: 700; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 4px rgb(0 0 0 / .4); pointer-events: none;
+}
 .map-status {
   max-width: 340px; padding: 4px 10px; border-radius: 7px; background: var(--banner-bg);
   color: var(--banner-ink); border: 1px solid var(--banner-line); font-size: 12px;

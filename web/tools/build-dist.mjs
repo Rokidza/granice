@@ -12,7 +12,7 @@ const web = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(web, "dist");
 const dataOut = join(web, "..", "data", "out");
 
-const PAGE_FILES = ["index.html", "app.js", "style.css", "js/colors.js", "js/critical.js", "js/package.json"];
+const PAGE_FILES = ["index.html", "app.js", "style.css", "js/colors.js", "js/critical.js", "js/geodesy.js", "js/package.json"];
 const VENDOR_FILES = ["maplibre-gl.js", "maplibre-gl.css", "pmtiles.js", "basemaps.js"];
 const DATA_FILES = [
   "meta.json", "staze.geojson", "granica.geojson", "segmenti.geojson", "prijelazi.geojson",
