@@ -404,6 +404,7 @@ function applyTheme() {
     for (const [property, value] of Object.entries(paint)) map.setPaintProperty(layerId, property, value);
   }
   $("map").style.setProperty("--danger", DANGER[theme]);
+  paintOverview(theme);
   renderLegend();
 }
 
@@ -1284,6 +1285,45 @@ function setupMeasure() {
   });
 }
 
+/** A small map of the whole border in a corner, with the current view outlined, so one knows where
+ * a deep zoom is. A click on it moves the main map there. */
+function paintOverview(theme) {
+  const { overview } = state;
+  if (!overview?.getLayer("pregled-linija")) return;
+  overview.setPaintProperty("background", "background-color", SURFACES[theme]);
+  overview.setPaintProperty("pregled-linija", "line-color", BORDER_COLORS[theme].line);
+  overview.setPaintProperty("pregled-okvir", "line-color", DANGER[theme]);
+  overview.setPaintProperty("pregled-ispuna", "fill-color", DANGER[theme]);
+}
+
+function setupOverview(granica, bounds) {
+  const { map } = state;
+  const overview = new globalThis.maplibregl.Map({
+    container: "overview", interactive: false, attributionControl: false, bounds, fitBoundsOptions: { padding: 10 },
+    style: { version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": SURFACES[mapTheme()] } }] },
+  });
+  state.overview = overview;
+  const frame = () => {
+    const b = map.getBounds();
+    const [w, s, e, n] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    return { type: "Feature", geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] }, properties: {} };
+  };
+  overview.on("load", () => {
+    overview.addSource("granica", { type: "geojson", data: granica });
+    overview.addSource("okvir", { type: "geojson", data: frame() });
+    overview.addLayer({ id: "pregled-linija", type: "line", source: "granica", paint: { "line-color": "#000", "line-width": 1.6 } });
+    overview.addLayer({ id: "pregled-ispuna", type: "fill", source: "okvir", paint: { "fill-color": "#c73751", "fill-opacity": 0.18 } });
+    overview.addLayer({ id: "pregled-okvir", type: "line", source: "okvir", paint: { "line-color": "#c73751", "line-width": 2 } });
+    paintOverview(mapTheme());
+    map.on("move", () => overview.getSource("okvir").setData(frame()));
+  });
+  $("overview").addEventListener("click", (event) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    const at = overview.unproject([event.clientX - box.left, event.clientY - box.top]);
+    map.easeTo({ center: at });
+  });
+}
+
 /** The side panel floats over the map and can be hidden, so the map can fill the screen. */
 function setupPanelToggle() {
   const layout = document.querySelector(".layout");
@@ -1502,6 +1542,7 @@ async function start() {
     setupCorridorChoice(firstCorridor !== null);
     setupSkipRiver();
     setupPanelToggle();
+    setupOverview(data.granica, bounds);
     recomputeAreas();
   });
 

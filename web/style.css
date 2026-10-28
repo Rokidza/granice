@@ -298,3 +298,10 @@ main { position: absolute; inset: 0; }
 .popup .muted { margin: 2px 0 0; color: var(--muted); }
 .popup details.more { margin-top: 6px; }
 .popup details.more summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+
+/* Overview of the whole border, above the scale in the bottom right corner */
+.overview {
+  position: absolute; right: 12px; bottom: 40px; z-index: 3; width: 190px; height: 140px;
+  border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; cursor: pointer;
+}
+@media (max-width: 760px) { .overview { width: 120px; height: 90px; } }
