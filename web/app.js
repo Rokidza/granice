@@ -1208,6 +1208,7 @@ function setupHover() {
       content = road ? includedTooltip(road.properties) : null;
     }
     if (!content && hit(event.point, "rijecna-granica")) content = riverTooltip();
+    state.hoverTooltipShown = Boolean(content);
     if (content) tooltip.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
     else tooltip.remove();
   });
@@ -1345,11 +1346,28 @@ function setupClicks() {
   });
   // Live coordinates of the mouse, small, in the top right corner.
   const live = $("cursor-coords");
+  // Holding the mouse still for a moment shows the coordinates next to it (unless another tooltip is up).
+  const dwell = new globalThis.maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, anchor: "top-left", className: "coords-popup dwell-popup" });
+  let dwellTimer = null;
+  const stopDwell = () => {
+    clearTimeout(dwellTimer);
+    dwell.remove();
+  };
   map.on("mousemove", (event) => {
     live.textContent = `${event.lngLat.lat.toFixed(5)}, ${event.lngLat.lng.toFixed(5)}`;
     live.hidden = false;
+    stopDwell();
+    if (state.measure.active) return;
+    dwellTimer = setTimeout(() => {
+      if (state.hoverTooltipShown) return;
+      dwell.setLngLat(event.lngLat).setText(live.textContent).addTo(map);
+    }, 600);
   });
-  map.getCanvas().addEventListener("mouseleave", () => { live.hidden = true; });
+  map.on("movestart", stopDwell);
+  map.getCanvas().addEventListener("mouseleave", () => {
+    live.hidden = true;
+    stopDwell();
+  });
 }
 
 // ---------------------------------------------------------------------------------------------

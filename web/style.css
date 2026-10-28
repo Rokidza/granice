@@ -298,3 +298,5 @@ main { position: absolute; inset: 0; }
 .popup .muted { margin: 2px 0 0; color: var(--muted); }
 .popup details.more { margin-top: 6px; }
 .popup details.more summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+
+.dwell-popup { pointer-events: none; }
