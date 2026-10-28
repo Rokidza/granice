@@ -19,12 +19,22 @@
         <button type="button" id="panel-close" class="icon-button" title="Sakrij panel i vidi cijelu kartu" aria-label="Sakrij panel">‹</button>
       </header>
 
+      <nav class="tabs" role="tablist" aria-label="Dijelovi panela">
+        <button type="button" role="tab" id="tab-prelasci" data-tab="prelasci" aria-selected="true" aria-controls="pane-prelasci">Prelasci</button>
+        <button type="button" role="tab" id="tab-podrucja" data-tab="podrucja" aria-selected="false" aria-controls="pane-podrucja" tabindex="-1">Područja</button>
+        <button type="button" role="tab" id="tab-slojevi" data-tab="slojevi" aria-selected="false" aria-controls="pane-slojevi" tabindex="-1">Slojevi</button>
+      </nav>
+
+      <div class="tab-body">
+      <div class="pane" id="pane-prelasci" role="tabpanel" aria-labelledby="tab-prelasci" data-pane="prelasci">
       <details class="panel cat-izravni" open>
         <summary><h2>Izravni prelasci</h2><span class="count" id="izravni-count">0</span></summary>
         <p id="izravni-summary" class="summary" aria-live="polite"></p>
         <ol id="izravni" class="areas" aria-label="Staze koje presijecaju granicu, klik zumira na kartu"></ol>
       </details>
+      </div>
 
+      <div class="pane" id="pane-podrucja" role="tabpanel" aria-labelledby="tab-podrucja" data-pane="podrucja" hidden>
       <section class="panel" aria-labelledby="h-prag">
         <h2 id="h-prag">Blizina staza</h2>
         <div class="controls">
@@ -46,6 +56,9 @@
         <ol id="areas-rijeka" class="areas" aria-label="Kritična područja gdje treba prijeći rijeku, klik zumira na kartu"></ol>
       </details>
 
+      </div>
+
+      <div class="pane" id="pane-slojevi" role="tabpanel" aria-labelledby="tab-slojevi" data-pane="slojevi" hidden>
       <section class="panel" aria-labelledby="h-layers">
         <div class="panel-head">
           <h2 id="h-layers">Slojevi</h2>
@@ -86,6 +99,8 @@
         <p id="osm-date"></p>
         <p>© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>. Izračunati slojevi objavljeni su pod licencom <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL</a>: <span id="data-links"></span></p>
       </footer>
+      </div>
+      </div>
     </aside>
 
     <main>

@@ -20,6 +20,7 @@ import {
   kriticnaPodrucja,
 } from "./js/critical.js";
 import { geodesicDistance } from "./js/geodesy.js";
+import { placeAt, placeShort, placeText } from "./js/places.js";
 
 const $ = (id) => document.getElementById(id);
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -438,16 +439,18 @@ async function fetchStyle(url) {
 async function basemapParts(def, theme) {
   if (def.kind === "none") return { sources: {}, layers: [] };
   if (def.kind === "raster") {
-    const id = `bm-${def.id}`;
-    return {
-      sources: {
-        [id]: {
-          type: "raster", tiles: def.tiles, tileSize: def.tileSize, maxzoom: def.maxzoom,
-          attribution: def.attribution,
-        },
-      },
-      layers: [{ id, type: "raster", source: id }],
-    };
+    // The imagery itself, then transparent label layers (`overlays`) drawn over it.
+    const sources = {};
+    const layers = [];
+    [def, ...(def.overlays ?? [])].forEach((part, index) => {
+      const id = index ? `bm-${def.id}-${index}` : `bm-${def.id}`;
+      sources[id] = {
+        type: "raster", tiles: part.tiles, tileSize: part.tileSize ?? def.tileSize, maxzoom: part.maxzoom ?? def.maxzoom,
+        attribution: part.attribution,
+      };
+      layers.push({ id, type: "raster", source: id });
+    });
+    return { sources, layers };
   }
   if (def.kind === "pmtiles") {
     const flavor = globalThis.basemaps.namedFlavor(theme);
@@ -943,6 +946,7 @@ function markListEntry(id) {
   const button = document.querySelector(`.area-button[data-id="${id}"]`);
   if (!button) return;
   button.setAttribute("aria-current", "true");
+  showTab(button.closest(".pane")?.dataset.pane);
   const section = button.closest("details");
   if (section) section.open = true;
   button.scrollIntoView({ block: "nearest" });
@@ -1079,7 +1083,9 @@ function renderAreaList(kategorija) {
     const text = element("span", undefined, "area-text");
     const head = element("span", undefined, "area-head");
     head.append(element("strong", `par staza ${metres(p.udaljenost_m)}`), element("span", ` · ${kilometres(area.lengthM)} granice`));
-    text.append(head, element("small", roads));
+    const where = element("small", undefined, "area-place");
+    text.append(head, where, element("small", roads));
+    fillPlaceWhenSeen(where, button, areaPoint(area));
     button.append(element("span", String(area.rang), "area-rank"), text);
     button.setAttribute("aria-label", `Područje ${area.rang}: par staza na ${metres(p.udaljenost_m)}, ${roads}, ${kilometres(area.lengthM)} granice. Prikaži na karti.`);
     button.addEventListener("click", () => showArea(area, { fly: true }));
@@ -1105,6 +1111,42 @@ function crossingName(p) {
 const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 const coordinatesText = ([lon, lat]) => `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
 
+/** A point in the middle of the closest pair of an area, to name the place it lies at. */
+function areaPoint(area) {
+  const line = closestPairSegment(area).geometry.coordinates;
+  return line[Math.floor(line.length / 2)];
+}
+
+/** A line saying where a point is (settlement, municipality, county), filled in once it is known. */
+function placeLine(coordinates, className = "muted") {
+  const line = element("p", "Tražim mjesto…", className);
+  placeAt(coordinates).then((place) => {
+    if (place) line.textContent = placeText(place);
+    else line.remove();
+  });
+  return line;
+}
+
+// Lists name the place of each entry when it scrolls into view, one lookup a second at most.
+const placeObserver = "IntersectionObserver" in globalThis
+  ? new IntersectionObserver((entries) => {
+    for (const { isIntersecting, target } of entries) {
+      if (!isIntersecting) continue;
+      placeObserver.unobserve(target);
+      target.placeFill?.();
+    }
+  }, { rootMargin: "120px" })
+  : null;
+
+/** Puts "place · county" into `node` once the list entry holding it is on screen. */
+function fillPlaceWhenSeen(node, button, coordinates, suffix = "") {
+  button.placeFill = () => placeAt(coordinates).then((place) => {
+    const text = placeShort(place);
+    if (text) node.textContent = text + suffix;
+  });
+  placeObserver?.observe(button);
+}
+
 /** One button per Izravni prelazak: roads first, then tracks and paths, along the border. */
 function renderCrossingList() {
   const list = $("izravni");
@@ -1127,7 +1169,9 @@ function renderCrossingList() {
     const text = element("span", undefined, "area-text");
     const head = element("span", undefined, "area-head");
     head.append(element("strong", capitalized(crossingName(p))));
-    text.append(head, element("small", `${capitalized(CATEGORY_LABELS[p.kategorija] ?? "staza")} · ${coordinatesText(feature.geometry.coordinates)}`));
+    const where = element("small", capitalized(CATEGORY_LABELS[p.kategorija] ?? "staza"));
+    text.append(head, where);
+    fillPlaceWhenSeen(where, button, feature.geometry.coordinates, ` · ${CATEGORY_LABELS[p.kategorija] ?? "staza"}`);
     button.append(element("span", String(i + 1), "area-rank"), text);
     button.setAttribute("aria-label", `Izravni prelazak ${i + 1}: ${crossingName(p)}. Prikaži na karti.`);
     button.addEventListener("click", () => showCrossing(feature));
@@ -1217,6 +1261,7 @@ function areaPopup(area, { compact = false } = {}) {
     element("p", `Najbliži par staza ${metres(p.udaljenost_m)} · ${kilometres(area.lengthM)} granice`, "muted"),
   );
   if (compact) return root;
+  root.append(placeLine(areaPoint(area)));
   const pair = element("dl", undefined, "pair");
   for (const [strana, prefix] of [["BiH", "bih"], ["HR", "hr"]]) {
     pair.append(
@@ -1247,6 +1292,7 @@ function crossingPopup(feature, { compact = false } = {}) {
   );
   if (compact) return root;
   root.append(
+    placeLine(feature.geometry.coordinates, "place"),
     element("p", "Staza prelazi granicu izvan službenog prijelaza."),
     element("p", coordinatesText(feature.geometry.coordinates), "muted"),
   );
@@ -1458,6 +1504,31 @@ function setupOverview(granica, bounds) {
   };
   box.addEventListener("pointerup", release);
   box.addEventListener("pointercancel", release);
+}
+
+/** The card has three tabs (Prelasci, Područja, Slojevi); only the chosen one is shown. */
+function showTab(name) {
+  if (!name) return;
+  for (const tab of document.querySelectorAll(".tabs [role=tab]")) {
+    const on = tab.dataset.tab === name;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+  }
+  for (const pane of document.querySelectorAll(".pane")) pane.hidden = pane.dataset.pane !== name;
+}
+
+function setupTabs() {
+  const tabs = [...document.querySelectorAll(".tabs [role=tab]")];
+  tabs.forEach((tab, i) => {
+    tab.addEventListener("click", () => showTab(tab.dataset.tab));
+    tab.addEventListener("keydown", (event) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+      if (!step) return;
+      const next = tabs[(i + step + tabs.length) % tabs.length];
+      showTab(next.dataset.tab);
+      next.focus();
+    });
+  });
 }
 
 /** The side panel floats over the map and can be hidden, so the map can fill the screen. */
@@ -1696,6 +1767,7 @@ async function start() {
     setupMeasure();
     setupCorridorChoice(firstCorridor !== null);
     setupSkipRiver();
+    setupTabs();
     setupPanelToggle();
     setupOverview(data.granica, bounds);
     state.crossings = crossingsFrom(data.prijelazi);

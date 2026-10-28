@@ -40,6 +40,11 @@ export default {
       tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
       tileSize: 256, maxzoom: 18,
       attribution: "Esri, Maxar, Earthstar Geographics i GIS User Community",
+      // Place names and boundaries over the imagery, from the same server.
+      overlays: [{
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256, maxzoom: 18,
+      }],
     },
     { id: "nema", label: "Bez podloge", short: "Prazno", kind: "none", palette: "system" },
   ],
