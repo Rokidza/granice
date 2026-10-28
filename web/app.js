@@ -367,27 +367,31 @@ function dataLayers(theme) {
   return layers;
 }
 
+// `label` is the chip text, `hint` the tooltip.
 const LAYER_GROUPS = [
-  { id: "cesta", label: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
-  { id: "makadam", label: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
-  { id: "staza", label: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
-  { id: "ukljucene", label: "Ceste uključene u izračun (crveni obrub)", layers: ["staze-ukljucene", "staze-par"] },
-  {
-    id: "parovi", label: "Pješački prijelazi najbližih parova (crtkano)",
-    layers: ["par-odabir", "parovi-casing", "parovi-linija", "parovi-tocke", "par-veza"],
-    onChange: (visible) => $("map").classList.toggle("hide-pair-labels", !visible),
-  },
-  { id: "granica", label: "Granična linija", layers: ["granica-casing", "granica"] },
-  { id: "rijeka", label: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
-  { id: "magla", label: "Magla izvan pojasa cesta", layers: ["pojas-magla"] },
-  {
-    id: "segmenti", label: "Segmenti granice u rasponu i stanja",
+  { id: "segmenti", label: "Rizik na granici", hint: "Segmenti granice u rasponu i njihova stanja",
     layers: [
       "segmenti-casing", "segmenti-raspon", "segmenti-izvan", "segmenti-nedovoljno", "segmenti-sporna",
       "segmenti-prijelaz", "segmenti-odabir-casing", "segmenti-odabir", "prijelazi-izravni",
-    ],
-  },
-  { id: "prijelazi", label: "Službeni prijelazi", layers: ["prijelazi-sluzbeni"] },
+    ] },
+  { id: "parovi", label: "Pješački prijelazi", hint: "Najkraći put pješice između cesta najbližih parova (crtkano)",
+    layers: ["par-odabir", "parovi-casing", "parovi-linija", "parovi-tocke", "par-veza"],
+    onChange: (visible) => $("map").classList.toggle("hide-pair-labels", !visible) },
+  { id: "ukljucene", label: "Ceste u izračunu", hint: "Ceste uključene u izračun (crveni obrub)", layers: ["staze-ukljucene", "staze-par"] },
+  { id: "prijelazi", label: "Službeni prijelazi", hint: "Službeni granični prijelazi", layers: ["prijelazi-sluzbeni"] },
+  { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica"] },
+  { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
+  { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
+  { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
+  { id: "staza", label: "Staze", hint: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
+  { id: "magla", label: "Magla", hint: "Magla izvan pojasa cesta", layers: ["pojas-magla"] },
+];
+
+// One-click views: the layer groups that stay on.
+const LAYER_PRESETS = [
+  { label: "Sve", on: null },
+  { label: "Samo rizik", on: ["segmenti", "parovi", "ukljucene", "prijelazi", "granica", "rijeka"] },
+  { label: "Čista karta", on: ["granica"] },
 ];
 
 /** Re-colours the data layers and legend for the current palette. */
@@ -545,25 +549,65 @@ function initialBasemap() {
 // ---------------------------------------------------------------------------------------------
 // Sidebar: layer toggles, legend, Kritična područja
 
+const LAYERS_STORAGE_KEY = "granice.slojevi";
+const hiddenGroups = new Set();
+
+function setGroupVisible(group, visible) {
+  if (visible) hiddenGroups.delete(group.id);
+  else hiddenGroups.add(group.id);
+  for (const id of group.layers) {
+    state.map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+  }
+  group.onChange?.(visible);
+}
+
+function syncLayerControls() {
+  for (const chip of $("layer-toggles").children) {
+    chip.setAttribute("aria-pressed", String(!hiddenGroups.has(chip.dataset.group)));
+  }
+  for (const button of $("layer-presets").children) {
+    const preset = LAYER_PRESETS[Number(button.dataset.preset)];
+    const wanted = (group) => !preset.on || preset.on.includes(group.id);
+    button.setAttribute("aria-pressed", String(LAYER_GROUPS.every((g) => wanted(g) === !hiddenGroups.has(g.id))));
+  }
+  try {
+    localStorage.setItem(LAYERS_STORAGE_KEY, JSON.stringify([...hiddenGroups]));
+  } catch { /* storage unavailable: the choice just is not remembered */ }
+}
+
+/** One pill per layer group, one click each; the presets switch several at once. */
 function renderToggles() {
   const list = $("layer-toggles");
+  const presets = $("layer-presets");
   list.replaceChildren();
+  presets.replaceChildren();
+  let saved = [];
+  try {
+    saved = JSON.parse(localStorage.getItem(LAYERS_STORAGE_KEY) ?? "[]");
+  } catch { /* ignore */ }
   for (const group of LAYER_GROUPS) {
-    const item = document.createElement("li");
-    const label = document.createElement("label");
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.checked = true;
-    box.addEventListener("change", () => {
-      for (const id of group.layers) {
-        state.map.setLayoutProperty(id, "visibility", box.checked ? "visible" : "none");
-      }
-      group.onChange?.(box.checked);
+    const chip = element("button", group.label, "chip");
+    chip.type = "button";
+    chip.dataset.group = group.id;
+    chip.title = group.hint;
+    chip.addEventListener("click", () => {
+      setGroupVisible(group, hiddenGroups.has(group.id));
+      syncLayerControls();
     });
-    label.append(box, group.label);
-    item.append(label);
-    list.append(item);
+    list.append(chip);
+    if (saved.includes(group.id)) setGroupVisible(group, false);
   }
+  LAYER_PRESETS.forEach((preset, index) => {
+    const button = element("button", preset.label, "preset");
+    button.type = "button";
+    button.dataset.preset = String(index);
+    button.addEventListener("click", () => {
+      for (const group of LAYER_GROUPS) setGroupVisible(group, !preset.on || preset.on.includes(group.id));
+      syncLayerControls();
+    });
+    presets.append(button);
+  });
+  syncLayerControls();
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -751,7 +795,6 @@ function applyCorridor(choice) {
   state.corridorM = choice.max_border_distance_m;
   state.map.getSource("segmenti").setData({ type: "FeatureCollection", features: state.segments });
   state.map.getSource("magla").setData(fogData(choice));
-  $("corridor-tag").textContent = `ceste do ${corridorText()} od granice`;
   setBandLimits();
   recomputeAreas();
 }
@@ -1244,6 +1287,18 @@ function setupMeasure() {
   });
 }
 
+/** The side panel floats over the map and can be hidden, so the map can fill the screen. */
+function setupPanelToggle() {
+  const layout = document.querySelector(".layout");
+  const set = (closed) => {
+    layout.classList.toggle("panel-closed", closed);
+    $("panel-open").hidden = !closed;
+  };
+  $("panel-close").addEventListener("click", () => set(true));
+  $("panel-open").addEventListener("click", () => set(false));
+  if (window.matchMedia("(max-width: 760px)").matches) set(true);
+}
+
 function setupClicks() {
   const { map } = state;
   let popup = null;
@@ -1332,8 +1387,6 @@ async function start() {
     link.download = file;
     $("data-links").append(link, " ");
   }
-  $("area-tag").textContent = data.meta.podrucje === "pilot" ? "pilot odsječak" : "cijela granica";
-  $("corridor-tag").textContent = `ceste do ${corridorText()} od granice`;
   $("osm-date").textContent = `OSM podaci od: ${new Date(data.meta.osm_podaci_od).toLocaleString("hr-HR", { dateStyle: "long", timeStyle: "short" })}`;
 
   state.hasLocalBasemap = await exists(absolute(CONFIG.basemap));
@@ -1388,6 +1441,7 @@ async function start() {
     setupMeasure();
     setupCorridorChoice(firstCorridor !== null);
     setupSkipRiver();
+    setupPanelToggle();
     recomputeAreas();
   });
 
