@@ -1285,8 +1285,12 @@ function setupMeasure() {
   });
 }
 
-/** A small map of the whole border in a corner, with the current view outlined, so one knows where
- * a deep zoom is. A click on it moves the main map there. */
+/** A small map of the whole border in a corner, shown once zoomed in, with the current view
+ * outlined so one knows where a deep zoom is. The frame can be dragged to move the main map. */
+const OVERVIEW_MIN_ZOOM = 9;
+const OVERVIEW_MIN_FRAME_DEG = 0.05; // half-size, so the frame stays visible and grabbable
+const OVERVIEW_FOLLOW = 0.18; // share of the remaining distance the map covers per frame: smooths the drag
+
 function paintOverview(theme) {
   const { overview } = state;
   if (!overview?.getLayer("pregled-linija")) return;
@@ -1294,58 +1298,83 @@ function paintOverview(theme) {
   overview.setPaintProperty("pregled-linija", "line-color", BORDER_COLORS[theme].line);
   overview.setPaintProperty("pregled-okvir", "line-color", DANGER[theme]);
   overview.setPaintProperty("pregled-ispuna", "fill-color", DANGER[theme]);
-  overview.setPaintProperty("pregled-sredina", "circle-color", DANGER[theme]);
 }
 
 function setupOverview(granica, bounds) {
   const { map } = state;
+  const box = $("overview");
   const overview = new globalThis.maplibregl.Map({
     container: "overview", interactive: false, attributionControl: false, bounds, fitBoundsOptions: { padding: 10 },
     style: { version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": SURFACES[mapTheme()] } }] },
   });
   state.overview = overview;
-  const frame = () => {
+  // The view of the main map, grown to a minimum size.
+  const frameBounds = () => {
     const b = map.getBounds();
-    const [w, s, e, n] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    const c = map.getCenter();
+    const grow = (low, high, mid) => [Math.min(low, mid - OVERVIEW_MIN_FRAME_DEG), Math.max(high, mid + OVERVIEW_MIN_FRAME_DEG)];
+    const [w, e] = grow(b.getWest(), b.getEast(), c.lng);
+    const [s, n] = grow(b.getSouth(), b.getNorth(), c.lat);
+    return { w, s, e, n };
+  };
+  const frame = () => {
+    const { w, s, e, n } = frameBounds();
     return { type: "Feature", geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] }, properties: {} };
   };
-  const centre = () => ({ type: "Feature", geometry: { type: "Point", coordinates: map.getCenter().toArray() }, properties: {} });
+  const update = () => {
+    box.classList.toggle("hidden", map.getZoom() < OVERVIEW_MIN_ZOOM);
+    overview.getSource("okvir")?.setData(frame());
+  };
   overview.on("load", () => {
     overview.addSource("granica", { type: "geojson", data: granica });
     overview.addSource("okvir", { type: "geojson", data: frame() });
     overview.addLayer({ id: "pregled-linija", type: "line", source: "granica", paint: { "line-color": "#000", "line-width": 1.6 } });
     overview.addLayer({ id: "pregled-ispuna", type: "fill", source: "okvir", paint: { "fill-color": "#c73751", "fill-opacity": 0.18 } });
     overview.addLayer({ id: "pregled-okvir", type: "line", source: "okvir", paint: { "line-color": "#c73751", "line-width": 2 } });
-    overview.addSource("sredina", { type: "geojson", data: centre() });
-    overview.addLayer({ id: "pregled-sredina", type: "circle", source: "sredina",
-      paint: { "circle-radius": 5, "circle-color": "#c73751", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
     paintOverview(mapTheme());
-    map.on("move", () => {
-      overview.getSource("okvir").setData(frame());
-      overview.getSource("sredina").setData(centre());
-    });
+    map.on("move", update);
+    update();
   });
-  // Drag the red frame (or press anywhere on the overview) to move the main map there.
-  const box = $("overview");
+
+  // Dragging: the pointer sets a target and the main map glides towards it, so a shaky hand or a
+  // coarse overview does not make the view jump about.
   const lngLatAt = (event) => {
     const rect = box.getBoundingClientRect();
     return overview.unproject([event.clientX - rect.left, event.clientY - rect.top]);
   };
   let grab = null; // [dLng, dLat] from the pointer to the map centre while dragging
+  let target = null;
+  let frameRequest = 0;
+  const glide = () => {
+    frameRequest = 0;
+    if (!target) return;
+    const centre = map.getCenter();
+    const [from, to] = [map.project(centre), map.project(target)];
+    const remaining = Math.hypot(to.x - from.x, to.y - from.y);
+    if (remaining < 0.5) {
+      map.jumpTo({ center: target });
+      return;
+    }
+    map.jumpTo({ center: [centre.lng + (target[0] - centre.lng) * OVERVIEW_FOLLOW, centre.lat + (target[1] - centre.lat) * OVERVIEW_FOLLOW] });
+    frameRequest = requestAnimationFrame(glide);
+  };
+  const aim = (event) => {
+    const at = lngLatAt(event);
+    target = [at.lng + grab[0], at.lat + grab[1]];
+    if (!frameRequest) frameRequest = requestAnimationFrame(glide);
+  };
   box.addEventListener("pointerdown", (event) => {
     const at = lngLatAt(event);
-    const view = map.getBounds();
-    const inside = at.lng >= view.getWest() && at.lng <= view.getEast() && at.lat >= view.getSouth() && at.lat <= view.getNorth();
+    const { w, s, e, n } = frameBounds();
+    const inside = at.lng >= w && at.lng <= e && at.lat >= s && at.lat <= n;
     const centre = map.getCenter();
     grab = inside ? [centre.lng - at.lng, centre.lat - at.lat] : [0, 0];
     try { box.setPointerCapture(event.pointerId); } catch { /* synthetic pointer: no capture */ }
     box.classList.add("dragging");
-    map.jumpTo({ center: [at.lng + grab[0], at.lat + grab[1]] });
+    aim(event);
   });
   box.addEventListener("pointermove", (event) => {
-    if (!grab) return;
-    const at = lngLatAt(event);
-    map.jumpTo({ center: [at.lng + grab[0], at.lat + grab[1]] });
+    if (grab) aim(event);
   });
   const release = () => {
     grab = null;
@@ -1491,6 +1520,12 @@ function boundsOf(features) {
   return bounds;
 }
 
+/** Padding for the first view: the floating panel covers the left, so the border is centred in what is free. */
+function initialPadding() {
+  const wide = !window.matchMedia("(max-width: 760px)").matches;
+  return { top: 70, bottom: 50, right: 70, left: wide ? 390 : 40 };
+}
+
 async function start() {
   let data;
   try {
@@ -1535,7 +1570,7 @@ async function start() {
     container: "map",
     attributionControl: false,
     bounds,
-    fitBoundsOptions: { padding: 40 },
+    fitBoundsOptions: { padding: initialPadding() },
     style: {
       version: 8,
       sources: {},
