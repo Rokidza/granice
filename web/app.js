@@ -1299,10 +1299,26 @@ function setupPanelToggle() {
   if (window.matchMedia("(max-width: 760px)").matches) set(true);
 }
 
+/** The clicked point as "lat, lon" with a link that searches it on Google Maps. */
+function coordinatesRow(lngLat) {
+  const text = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+  const row = element("div", undefined, "coords");
+  const link = element("a", undefined, "coords-link");
+  link.href = `https://www.google.com/maps/search/?api=1&query=${lngLat.lat.toFixed(6)},${lngLat.lng.toFixed(6)}`;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.title = "Otvori ove koordinate na Google Mapsu";
+  link.setAttribute("aria-label", `Otvori ${text} na Google Mapsu`);
+  link.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 10l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  row.append(element("span", text, "coords-text"), link);
+  return row;
+}
+
 function setupClicks() {
   const { map } = state;
   let popup = null;
-  const open = (lngLat, content) => {
+  const open = (lngLat, content, at = lngLat) => {
+    content.append(coordinatesRow(at));
     popup?.remove();
     popup = new globalThis.maplibregl.Popup({ maxWidth: "340px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
   };
@@ -1313,17 +1329,17 @@ function setupClicks() {
     if (icons.length) {
       const root = element("div", undefined, "popup");
       root.append(element("h3", "Službeni prijelaz"), element("p", "Službeni prijelaz (OSM barrier=border_control). Susjedni segmenti izuzeti su iz procjene rizika."));
-      open(icons[0].geometry.coordinates, root);
+      open(icons[0].geometry.coordinates, root, event.lngLat);
       return;
     }
     const hits = map.queryRenderedFeatures(box, { layers: SEGMENT_LAYERS });
     if (!hits.length) {
-      popup?.remove();
       map.setFilter("segmenti-odabir", ["==", ["get", "id"], ""]);
       // Leaves the chosen Kritično područje too, with the highlight of its pair.
       for (const button of document.querySelectorAll(".area-button[aria-current]")) button.removeAttribute("aria-current");
       state.selectedPair = null;
       highlightPair(null);
+      open(event.lngLat, element("div", undefined, "popup"));
       return;
     }
     const { properties } = hits[0];
