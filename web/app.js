@@ -34,7 +34,6 @@ const number = (digits) =>
 const ink = (theme) => (theme === "dark" ? "#f0efec" : "#0b0b0b");
 const absolute = (path) => new URL(path, document.baseURI).href;
 
-const CATEGORY_LABELS = { cesta: "cesta", makadam: "makadam / šumski put", staza: "staza / puteljak" };
 // What kind of road an unnamed Staza of a nearest pair is, from its OSM highway tag.
 const HIGHWAY_LABELS = {
   trunk: "brza cesta", trunk_link: "brza cesta",
@@ -335,10 +334,12 @@ function dataLayers(theme) {
       layout: { "line-cap": "round" }, paint: { ...colors["segmenti-odabir"], "line-width": zoomScaled(8) } },
     { id: "prijelazi-sluzbeni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "sluzbeni_prijelaz"],
+      minzoom: 9,
       layout: { "icon-image": "ikona-prijelaz", "icon-allow-overlap": true,
         "icon-size": ICON_SIZE } },
     { id: "prijelazi-izravni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "izravni_prelazak"],
+      minzoom: 11,
       layout: { "icon-image": "ikona-izravni", "icon-allow-overlap": true,
         "icon-size": ICON_SIZE } },
     // Walking links of the nearest pairs: from the BiH road across the border to the HR road. The
@@ -1076,40 +1077,36 @@ function element(tag, text, className) {
   return node;
 }
 
-function stazaDescription(p, prefix) {
-  const id = p[`${prefix}_staza_id`];
-  if (id === null || id === undefined) return "–";
-  const name = p[`${prefix}_staza_naziv`] || "bez naziva";
-  const category = CATEGORY_LABELS[p[`${prefix}_staza_kategorija`]] || "";
-  return `${name} · ${category} · OSM way ${id}`;
-}
-
 function segmentPopup(p) {
   const root = element("div", undefined, "popup");
-  root.append(element("h3", `Segment granice ${p.id}`));
   const lead = {
-    nedovoljno_podataka: `Nedovoljno podataka: s barem jedne Strane nema ceste unutar ${corridorText()} od granice. Rizik se ne procjenjuje, a to nije isto što i nizak rizik.`,
-    sluzbeni_prijelaz: "Uz Službeni prijelaz. Segment je izuzet iz procjene rizika.",
-    sporna_granica: "Sporna granica. Za ovaj segment rizik se ne računa.",
+    nedovoljno_podataka: "Nedovoljno podataka s barem jedne Strane. To nije nizak rizik.",
+    sluzbeni_prijelaz: "Uz Službeni prijelaz, izuzeto iz procjene.",
+    sporna_granica: "Sporna granica, rizik se ne računa.",
   }[p.stanje];
   if (lead) {
     root.append(element("p", lead));
     return root;
   }
+  if (p.izravni_prelazak) {
+    root.append(element("strong", "Izravni prelazak"), element("p", "Cesta prelazi granicu izvan prijelaza.", "muted"));
+  } else {
+    root.append(
+      element("strong", `Rizik ${number(2).format(p.rizik)}`),
+      element("p", `Najbliži par cesta: ${metres(p.udaljenost_m)}${p.rijeka ? " · rijeka" : ""}`, "muted"),
+    );
+  }
+  const more = element("details", undefined, "more");
+  more.append(element("summary", "Detalji"));
   const list = element("dl");
-  const rows = [
-    ["Rizik prelaska", `${number(2).format(p.rizik)} (od 0 do 1)`],
-    ["Najbliži par cesta", `${number(0).format(p.udaljenost_m)} m`],
-    ["HR cesta", stazaDescription(p, "hr")],
-    ["HR cesta od granice", metres(p.hr_od_granice_m)],
-    ["BiH cesta", stazaDescription(p, "bih")],
-    ["BiH cesta od granice", metres(p.bih_od_granice_m)],
-    ["Duljina segmenta", `${number(0).format(p.duljina_m)} m`],
-  ];
-  for (const [term, value] of rows) list.append(element("dt", term), element("dd", value));
-  root.append(list);
-  if (p.izravni_prelazak) root.append(element("span", "Izravni prelazak", "flag"));
-  if (p.rijeka) root.append(element("span", "rijeka (rizik spušten za jedan stupanj)", "flag"));
+  for (const [term, value] of [
+    ["HR cesta", `${roadName(p, "hr")}, ${metres(p.hr_od_granice_m)} od granice`],
+    ["BiH cesta", `${roadName(p, "bih")}, ${metres(p.bih_od_granice_m)} od granice`],
+    ["Duljina", metres(p.duljina_m)],
+    ["Segment", String(p.id)],
+  ]) list.append(element("dt", term), element("dd", value));
+  more.append(list);
+  root.append(more);
   return root;
 }
 
