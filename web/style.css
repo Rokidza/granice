@@ -302,6 +302,7 @@ main { position: absolute; inset: 0; }
 /* Overview of the whole border, above the scale in the bottom right corner */
 .overview {
   position: absolute; right: 12px; bottom: 40px; z-index: 3; width: 190px; height: 140px;
-  border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; cursor: grab; touch-action: none;
 }
+.overview.dragging { cursor: grabbing; }
 @media (max-width: 760px) { .overview { width: 120px; height: 90px; } }

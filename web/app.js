@@ -1294,6 +1294,7 @@ function paintOverview(theme) {
   overview.setPaintProperty("pregled-linija", "line-color", BORDER_COLORS[theme].line);
   overview.setPaintProperty("pregled-okvir", "line-color", DANGER[theme]);
   overview.setPaintProperty("pregled-ispuna", "fill-color", DANGER[theme]);
+  overview.setPaintProperty("pregled-sredina", "circle-color", DANGER[theme]);
 }
 
 function setupOverview(granica, bounds) {
@@ -1308,20 +1309,50 @@ function setupOverview(granica, bounds) {
     const [w, s, e, n] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
     return { type: "Feature", geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] }, properties: {} };
   };
+  const centre = () => ({ type: "Feature", geometry: { type: "Point", coordinates: map.getCenter().toArray() }, properties: {} });
   overview.on("load", () => {
     overview.addSource("granica", { type: "geojson", data: granica });
     overview.addSource("okvir", { type: "geojson", data: frame() });
     overview.addLayer({ id: "pregled-linija", type: "line", source: "granica", paint: { "line-color": "#000", "line-width": 1.6 } });
     overview.addLayer({ id: "pregled-ispuna", type: "fill", source: "okvir", paint: { "fill-color": "#c73751", "fill-opacity": 0.18 } });
     overview.addLayer({ id: "pregled-okvir", type: "line", source: "okvir", paint: { "line-color": "#c73751", "line-width": 2 } });
+    overview.addSource("sredina", { type: "geojson", data: centre() });
+    overview.addLayer({ id: "pregled-sredina", type: "circle", source: "sredina",
+      paint: { "circle-radius": 5, "circle-color": "#c73751", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
     paintOverview(mapTheme());
-    map.on("move", () => overview.getSource("okvir").setData(frame()));
+    map.on("move", () => {
+      overview.getSource("okvir").setData(frame());
+      overview.getSource("sredina").setData(centre());
+    });
   });
-  $("overview").addEventListener("click", (event) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    const at = overview.unproject([event.clientX - box.left, event.clientY - box.top]);
-    map.easeTo({ center: at });
+  // Drag the red frame (or press anywhere on the overview) to move the main map there.
+  const box = $("overview");
+  const lngLatAt = (event) => {
+    const rect = box.getBoundingClientRect();
+    return overview.unproject([event.clientX - rect.left, event.clientY - rect.top]);
+  };
+  let grab = null; // [dLng, dLat] from the pointer to the map centre while dragging
+  box.addEventListener("pointerdown", (event) => {
+    const at = lngLatAt(event);
+    const view = map.getBounds();
+    const inside = at.lng >= view.getWest() && at.lng <= view.getEast() && at.lat >= view.getSouth() && at.lat <= view.getNorth();
+    const centre = map.getCenter();
+    grab = inside ? [centre.lng - at.lng, centre.lat - at.lat] : [0, 0];
+    try { box.setPointerCapture(event.pointerId); } catch { /* synthetic pointer: no capture */ }
+    box.classList.add("dragging");
+    map.jumpTo({ center: [at.lng + grab[0], at.lat + grab[1]] });
   });
+  box.addEventListener("pointermove", (event) => {
+    if (!grab) return;
+    const at = lngLatAt(event);
+    map.jumpTo({ center: [at.lng + grab[0], at.lat + grab[1]] });
+  });
+  const release = () => {
+    grab = null;
+    box.classList.remove("dragging");
+  };
+  box.addEventListener("pointerup", release);
+  box.addEventListener("pointercancel", release);
 }
 
 /** The side panel floats over the map and can be hidden, so the map can fill the screen. */
