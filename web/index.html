@@ -12,26 +12,17 @@
   <div class="layout">
     <aside class="sidebar" aria-label="Upravljanje kartom">
       <header class="brand">
-        <h1>Granice</h1>
-        <p>Rizik prelaska granice HR–BiH</p>
-        <p class="tags"><span class="tag" id="area-tag">cijela granica</span><span class="tag" id="corridor-tag"></span><span class="tag">indikativna procjena</span></p>
+        <div>
+          <h1>Granice</h1>
+          <p>Rizik prelaska granice HR–BiH</p>
+        </div>
+        <button type="button" id="panel-close" class="icon-button" title="Sakrij panel i vidi cijelu kartu" aria-label="Sakrij panel">‹</button>
       </header>
 
       <section class="panel" aria-labelledby="h-areas">
         <h2 id="h-areas">Kritična područja</h2>
-        <button type="button" id="skip-river" class="big-toggle" aria-pressed="false" aria-describedby="skip-river-detail">
-          <span class="big-toggle-switch" aria-hidden="true"></span>
-          <span class="big-toggle-text">
-            <strong>Ignoriraj crvena područja na rijeci</strong>
-            <small id="skip-river-detail"></small>
-          </span>
-        </button>
         <p id="areas-summary" class="summary" aria-live="polite"></p>
         <div class="controls">
-          <label class="inline" for="corridor">Ceste do
-            <select id="corridor" aria-describedby="corridor-status"></select> od granice
-          </label>
-          <p id="corridor-status" class="corridor-status" role="status"></p>
           <p>Najbliži par cesta od <output id="band-value"></output></p>
           <div class="band">
             <label for="band-min">od</label>
@@ -43,14 +34,34 @@
         <ol id="areas" class="areas" aria-label="Pronađena područja, klik zumira na kartu"></ol>
       </section>
 
-      <details class="panel" open>
-        <summary><h2>Legenda</h2></summary>
-        <div id="legend"></div>
+      <section class="panel" aria-labelledby="h-layers">
+        <div class="panel-head">
+          <h2 id="h-layers">Slojevi</h2>
+          <div id="layer-presets" class="presets" role="group" aria-label="Brzi prikazi"></div>
+        </div>
+        <div class="chips" id="layer-toggles" role="group" aria-label="Slojevi na karti"></div>
+      </section>
+
+      <details class="panel">
+        <summary><h2>Napredno</h2></summary>
+        <div class="controls">
+          <label class="inline" for="corridor">Ceste do
+            <select id="corridor" aria-describedby="corridor-status"></select> od granice
+          </label>
+          <p id="corridor-status" class="corridor-status" role="status"></p>
+          <button type="button" id="skip-river" class="small-toggle" aria-pressed="false" aria-describedby="skip-river-detail">
+            <span class="small-toggle-switch" aria-hidden="true"></span>
+            <span class="small-toggle-text">
+              <strong>Ignoriraj crvena područja na rijeci</strong>
+              <small id="skip-river-detail"></small>
+            </span>
+          </button>
+        </div>
       </details>
 
       <details class="panel">
-        <summary><h2>Slojevi</h2></summary>
-        <ul class="toggles" id="layer-toggles"></ul>
+        <summary><h2>Legenda</h2></summary>
+        <div id="legend"></div>
       </details>
 
       <footer class="notes">
@@ -65,6 +76,7 @@
     </aside>
 
     <main>
+      <button type="button" id="panel-open" class="tool-button" title="Prikaži panel" hidden>☰ Panel</button>
       <div id="map" role="application" aria-label="Karta Staza i rizika prelaska"></div>
       <div class="map-tools">
         <div class="tool-row">
