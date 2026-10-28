@@ -1309,7 +1309,7 @@ function coordinatesRow(lngLat) {
   link.rel = "noopener noreferrer";
   link.title = "Otvori ove koordinate na Google Mapsu";
   link.setAttribute("aria-label", `Otvori ${text} na Google Mapsu`);
-  link.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 10l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  link.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8a5.2 5.2 0 0 0-5.2 5.2c0 3.7 5.2 9.2 5.2 9.2s5.2-5.5 5.2-9.2A5.2 5.2 0 0 0 8 .8z" fill="#ea4335"/><circle cx="8" cy="6" r="2.1" fill="#ffffff"/></svg>';
   row.append(element("span", text, "coords-text"), link);
   return row;
 }
@@ -1317,10 +1317,10 @@ function coordinatesRow(lngLat) {
 function setupClicks() {
   const { map } = state;
   let popup = null;
-  const open = (lngLat, content, at = lngLat) => {
+  const open = (lngLat, content, at = lngLat, compact = false) => {
     content.append(coordinatesRow(at));
     popup?.remove();
-    popup = new globalThis.maplibregl.Popup({ maxWidth: "340px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    popup = new globalThis.maplibregl.Popup({ maxWidth: "340px", closeButton: !compact, className: compact ? "coords-popup" : "" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
   };
   map.on("click", (event) => {
     if (state.measure.active) return; // clicks set measuring points instead
@@ -1339,19 +1339,20 @@ function setupClicks() {
       for (const button of document.querySelectorAll(".area-button[aria-current]")) button.removeAttribute("aria-current");
       state.selectedPair = null;
       highlightPair(null);
-      open(event.lngLat, element("div", undefined, "popup"));
+      open(event.lngLat, element("div", undefined, "popup"), event.lngLat, true);
       return;
     }
     const { properties } = hits[0];
     map.setFilter("segmenti-odabir", ["==", ["get", "id"], properties.id]);
     open(event.lngLat, segmentPopup(properties));
   });
+  // Live coordinates of the mouse, small, in the top right corner.
+  const live = $("cursor-coords");
   map.on("mousemove", (event) => {
-    if (state.measure.active) return; // the cursor stays a crosshair
-    const box = [[event.point.x - 6, event.point.y - 6], [event.point.x + 6, event.point.y + 6]];
-    const layers = [...SEGMENT_LAYERS, "prijelazi-sluzbeni"].filter((id) => map.getLayoutProperty(id, "visibility") !== "none");
-    map.getCanvas().style.cursor = map.queryRenderedFeatures(box, { layers }).length ? "pointer" : "";
+    live.textContent = `${event.lngLat.lat.toFixed(5)}, ${event.lngLat.lng.toFixed(5)}`;
+    live.hidden = false;
   });
+  map.getCanvas().addEventListener("mouseleave", () => { live.hidden = true; });
 }
 
 // ---------------------------------------------------------------------------------------------

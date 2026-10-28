@@ -283,3 +283,20 @@ main { position: absolute; inset: 0; }
   .map-tools, .layout.panel-closed .map-tools { left: 12px; top: 56px; }
   .layout:not(.panel-closed) .map-tools { top: 12px; }
 }
+
+/* Plain arrow instead of MapLibre's hand; the measuring tool still sets its crosshair inline */
+.maplibregl-canvas-container.maplibregl-interactive,
+.maplibregl-canvas-container.maplibregl-interactive:active { cursor: default; }
+
+.cursor-coords {
+  position: absolute; top: 12px; right: 56px; z-index: 3; margin: 0; padding: 2px 7px; border-radius: 5px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--ink);
+  font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.cursor-coords[hidden] { display: none; }
+
+/* The popup of a click on empty map: just the coordinates, small */
+.coords-popup .maplibregl-popup-content { min-width: 0; padding: 4px 6px 4px 9px; font-size: 12px; border-radius: 7px; }
+.coords-popup .coords { margin-top: 0; gap: 8px; }
+.coords-popup .coords-link { width: 22px; height: 22px; border-radius: 5px; }
+.coords-popup .coords-link svg { width: 13px; height: 13px; }
