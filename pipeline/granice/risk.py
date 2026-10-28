@@ -65,6 +65,15 @@ class RiskInput:
 
 
 @dataclass(frozen=True)
+class Crossing:
+    """Where a Staza passes the border line (an Izravni prelazak) and which Staza it is."""
+
+    way_id: int
+    category: str
+    point: Point
+
+
+@dataclass(frozen=True)
 class SegmentGranice:
     chain: int
     order: int
@@ -83,6 +92,7 @@ class SegmentGranice:
     # The shortest line between the nearest pair, from the HR end to the BiH end: where one would
     # walk across the border from one road to the other.
     link: LineString | None = None
+    crossing: Crossing | None = None  # the Staza of an Izravni prelazak
 
 
 @dataclass(frozen=True)
@@ -159,7 +169,7 @@ def clip_to_border(staze: list[Staza], border: list[LineString], distance_m: flo
 
 def assess_crossing_risk(data: RiskInput, params: Params) -> Assessment:
     staze = clip_to_border(data.staze, data.border, params.max_border_distance_m)
-    crossings = _crossing_points(staze)
+    crossings = _crossings(staze)
     indexes = _SpatialIndexes(
         _SideIndex([s for s in staze if s.strana == Strana.HR]),
         _SideIndex([s for s in staze if s.strana == Strana.BIH]),
@@ -169,11 +179,13 @@ def assess_crossing_risk(data: RiskInput, params: Params) -> Assessment:
     segments: list[SegmentGranice] = []
     for chain_no, chain in enumerate(data.border):
         parts = _split_chain(chain, params.segment_length_m)
-        crossed = {
-            min(int(chain.project(p) // params.segment_length_m), len(parts) - 1)
-            for p in crossings
-            if chain.distance(p) <= CROSSING_TOLERANCE_M
-        }
+        crossed: dict[int, Crossing] = {}  # the most road-like Staza wins a segment
+        for crossing in crossings:
+            if chain.distance(crossing.point) <= CROSSING_TOLERANCE_M:
+                order = min(
+                    int(chain.project(crossing.point) // params.segment_length_m), len(parts) - 1
+                )
+                crossed.setdefault(order, crossing)
         for order, line in enumerate(parts):
             if any(line.intersects(d) for d in data.sporna_granica):
                 segments.append(SegmentGranice(chain_no, order, line, "sporna_granica"))
@@ -193,6 +205,7 @@ def assess_crossing_risk(data: RiskInput, params: Params) -> Assessment:
                     nearest_distance_m=0.0,
                     flags=segment.flags + ("izravni_prelazak",),
                     link=None,  # the Staza itself crosses here: no walking between roads
+                    crossing=crossed[order],
                 )
             segments.append(segment)
     return Assessment(segments, _kriticna_podrucja(segments, params))
@@ -232,19 +245,23 @@ def _kriticna_podrucja(segments: list[SegmentGranice], params: Params) -> list[K
     return sorted(areas, key=lambda a: (-a.peak_risk_index, -a.length_m))
 
 
-def _crossing_points(staze: list[Staza]) -> list[Point]:
-    """Points where a Staza passes from one Strana to the other (pieces sharing a way_id)."""
+_CATEGORY_ORDER = {"cesta": 0, "makadam": 1, "staza": 2}
+
+
+def _crossings(staze: list[Staza]) -> list[Crossing]:
+    """Where a Staza passes from one Strana to the other (pieces sharing a way_id), roads first."""
     pieces: dict[int, tuple[list[Staza], list[Staza]]] = {}
     for staza in staze:
         hr, bih = pieces.setdefault(staza.way_id, ([], []))
         (hr if staza.strana == Strana.HR else bih).append(staza)
-    points = []
+    crossings = []
     for hr, bih in pieces.values():
         for a in hr:
             for b in bih:
                 if a.geometry.distance(b.geometry) <= CROSSING_TOLERANCE_M:
-                    points.append(nearest_points(a.geometry, b.geometry)[0])
-    return points
+                    point = nearest_points(a.geometry, b.geometry)[0]
+                    crossings.append(Crossing(a.way_id, a.category, point))
+    return sorted(crossings, key=lambda c: _CATEGORY_ORDER.get(c.category, len(_CATEGORY_ORDER)))
 
 
 class _SideIndex:

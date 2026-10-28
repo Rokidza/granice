@@ -14,25 +14,37 @@
       <header class="brand">
         <div>
           <h1>Granice</h1>
-          <p>Gdje se ceste s obje strane granice približavaju: mogući putovi prelaska HR–BiH</p>
+          <p>Gdje se putovi s obje strane granice približavaju: mogući prelasci HR–BiH</p>
         </div>
         <button type="button" id="panel-close" class="icon-button" title="Sakrij panel i vidi cijelu kartu" aria-label="Sakrij panel">‹</button>
       </header>
 
-      <section class="panel" aria-labelledby="h-areas">
-        <h2 id="h-areas">Kritična područja</h2>
-        <p id="areas-summary" class="summary" aria-live="polite"></p>
+      <details class="panel cat-izravni" open>
+        <summary><h2>Izravni prelasci</h2><span class="count" id="izravni-count">0</span></summary>
+        <p id="izravni-summary" class="summary" aria-live="polite"></p>
+        <ol id="izravni" class="areas" aria-label="Staze koje presijecaju granicu, klik zumira na kartu"></ol>
+      </details>
+
+      <section class="panel" aria-labelledby="h-prag">
+        <h2 id="h-prag">Blizina staza</h2>
         <div class="controls">
-          <p>Najbliži par cesta od <output id="band-value"></output></p>
-          <div class="band">
-            <label for="band-min">od</label>
-            <input id="band-min" type="range" min="0" step="50" aria-label="Najbliži par cesta od (m)">
-            <label for="band-max">do</label>
-            <input id="band-max" type="range" min="0" step="50" aria-label="Najbliži par cesta do (m)">
-          </div>
+          <p>Najbliži par staza <output id="band-value"></output></p>
+          <input id="band-max" type="range" min="0" step="50" aria-label="Najbliži par staza do (m)">
+          <p class="hint">Kritična područja su dijelovi granice na kojima su ceste, makadami i staze s obje strane toliko blizu.</p>
         </div>
-        <ol id="areas" class="areas" aria-label="Pronađena područja, klik zumira na kartu"></ol>
       </section>
+
+      <details class="panel cat-kopno" open>
+        <summary><h2>Kritična područja: blizu granice</h2><span class="count" id="areas-count-kopno">0</span></summary>
+        <p id="areas-summary-kopno" class="summary" aria-live="polite"></p>
+        <ol id="areas-kopno" class="areas" aria-label="Kritična područja bez rijeke, klik zumira na kartu"></ol>
+      </details>
+
+      <details class="panel cat-rijeka" open>
+        <summary><h2>Kritična područja: preko rijeke</h2><span class="count" id="areas-count-rijeka">0</span></summary>
+        <p id="areas-summary-rijeka" class="summary" aria-live="polite"></p>
+        <ol id="areas-rijeka" class="areas" aria-label="Kritična područja gdje treba prijeći rijeku, klik zumira na kartu"></ol>
+      </details>
 
       <section class="panel" aria-labelledby="h-layers">
         <div class="panel-head">
@@ -45,14 +57,14 @@
       <details class="panel">
         <summary><h2>Napredno</h2></summary>
         <div class="controls">
-          <label class="inline" for="corridor">Ceste do
+          <label class="inline" for="corridor">Putovi do
             <select id="corridor" aria-describedby="corridor-status"></select> od granice
           </label>
           <p id="corridor-status" class="corridor-status" role="status"></p>
           <button type="button" id="skip-river" class="small-toggle" aria-pressed="false" aria-describedby="skip-river-detail">
             <span class="small-toggle-switch" aria-hidden="true"></span>
             <span class="small-toggle-text">
-              <strong>Ignoriraj crvena područja na rijeci</strong>
+              <strong>Izostavi granicu uz rijeku</strong>
               <small id="skip-river-detail"></small>
             </span>
           </button>
@@ -67,7 +79,7 @@
       <footer class="notes">
         <ul>
           <li>Granična linija je informativna (izvor: OpenStreetMap) i nije pravno obvezujuća. Procjena je indikativna i nije validirana terenskim podacima.</li>
-          <li>Rizik se računa samo iz cesta (makadami i staze se ne računaju), bez podataka o osobama, incidentima ili patrolama.</li>
+          <li>Izračun uključuje ceste, makadame i staze iz OSM-a, bez podataka o osobama, incidentima ili patrolama.</li>
           <li>OSM je u BiH slabije mapiran: „Nedovoljno podataka” nije isto što i nizak rizik.</li>
           <li>Podloge se dohvaćaju s vanjskih poslužitelja (OpenFreeMap, OpenTopoMap, Esri).</li>
         </ul>

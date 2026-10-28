@@ -30,8 +30,12 @@ export const BORDER_COLORS = {
   dark: { line: "#f4f2ec", casing: "#0d0d0d" },
 };
 
-// Segments in the band.
+// Kritično područje blizu granice and the highlighted pair of Staze of a chosen area.
 export const DANGER = { light: "#c73751", dark: "#ff4d5e" };
+
+// The pins on the map (drawn once, with a white outline, so one colour serves both themes): a
+// Kritično područje without water between the pair, one with a river between, an Izravni prelazak.
+export const PINS = { kopno: "#c73751", rijeka: "#0a6cff", izravni: "#161615" };
 
 // Riječna granica: the stretches of the border that run along a river, bright blue.
 export const RIVER = { light: "#0a6cff", dark: "#3d9bff" };

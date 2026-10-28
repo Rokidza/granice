@@ -41,8 +41,8 @@ AREAS = {"cijela": BORDER_BBOX, "pilot": PILOT_BBOX}
 # How far from the border Staze are fetched. Must be at least the risk search radius.
 CORRIDOR_M = 3500
 
-# Categories of Staze that take part in the risk calculation. The others are still drawn on the map.
-RISK_CATEGORIES = ("cesta",)
+# Categories of Staze that take part in the risk calculation: every way one can walk.
+RISK_CATEGORIES = ("cesta", "makadam", "staza")
 
 # Values of max_border_distance_m computed in advance: on the web page the planner types in how far
 # from the border roads count, and the page loads the nearest of these.

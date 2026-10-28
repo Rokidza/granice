@@ -10,6 +10,9 @@
   --accent: #184f95;
   --danger: #c73751;
   --river: #0a6cff;
+  --cat-izravni: #161615;
+  --cat-kopno: #c73751;
+  --cat-rijeka: #0a6cff;
   --banner-bg: #fff4d6;
   --banner-ink: #3b2a00;
   --banner-line: #b27b00;
@@ -29,6 +32,9 @@
     --accent: #86b6ef;
     --danger: #ff4d5e;
     --river: #3d9bff;
+    --cat-izravni: #f0efec;
+    --cat-kopno: #ff4d5e;
+    --cat-rijeka: #3d9bff;
     --banner-bg: #3a2c05;
     --banner-ink: #ffe9b0;
     --banner-line: #d9a21c;
@@ -74,7 +80,9 @@ ul, ol { list-style: none; }
   display: inline; font-size: 12px; font-weight: 700;
   letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
 }
-details.panel > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.panel > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+details.panel > summary h2 { flex: 1; }
+.count { flex: none; min-width: 24px; padding: 0 8px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); color: var(--ink-2); font-size: 12px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
 details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: "▾"; color: var(--muted); }
 details.panel:not([open]) > summary::after { content: "▸"; }
@@ -83,7 +91,7 @@ summary:focus-visible, button:focus-visible, input:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
-.summary { margin: 6px 0 10px; color: var(--ink-2); }
+.summary { margin: 6px 0 4px; color: var(--ink-2); }
 .summary strong { font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* Kritična područja controls */
@@ -91,22 +99,28 @@ summary:focus-visible, button:focus-visible, input:focus-visible {
 .controls label, .controls p { color: var(--ink-2); }
 .controls output { color: var(--ink); font-weight: 700; }
 .band { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
-input[type="range"] { width: 100%; accent-color: var(--danger); margin: 0; }
+input[type="range"] { width: 100%; accent-color: var(--ink-2); margin: 0; }
+.hint { color: var(--muted); font-size: 12px; }
 label.inline { display: flex; align-items: center; gap: 8px; }
 /* Kritična područja: one button per area, a click zooms to it */
-.areas { list-style: none; margin: 12px 0 0; padding: 0 2px 0 0; display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
+.areas { list-style: none; margin: 8px 0 0; padding: 0 2px 0 0; display: grid; gap: 6px; max-height: 240px; overflow-y: auto; }
+.areas:empty { display: none; }
+.cat-izravni { --cat: var(--cat-izravni); }
+.cat-kopno { --cat: var(--cat-kopno); }
+.cat-rijeka { --cat: var(--cat-rijeka); }
 .area-button {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; font: inherit;
   text-align: left; color: var(--ink); background: var(--raised); border: 1px solid var(--line);
   border-radius: 8px; cursor: pointer;
 }
-.area-button:hover { border-color: var(--danger); }
+.area-button:hover { border-color: var(--cat, var(--ink-2)); }
 .area-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.area-button[aria-current="true"] { border: 2px solid var(--danger); padding: 7px 9px; }
+.area-button[aria-current="true"] { border: 2px solid var(--cat, var(--ink-2)); padding: 7px 9px; }
 .area-rank {
   display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%;
-  background: var(--danger); color: #fff; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums;
+  background: var(--cat, var(--ink-2)); color: var(--surface); font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums;
 }
+.area-button.cat-kopno .area-rank, .area-button.cat-rijeka .area-rank { color: #fff; }
 .area-text { display: grid; gap: 1px; min-width: 0; }
 .area-head span { color: var(--ink-2); }
 .area-text small { color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
@@ -169,10 +183,6 @@ button:hover { border-color: var(--ink-2); }
 .sample { display: inline-grid; place-items: center; width: 40px; height: 22px; border-radius: 4px; }
 .sample svg { display: block; }
 .legend-icon { width: 26px; height: 26px; }
-.hatch-swatch {
-  width: 28px; height: 12px; border: 1px solid #8a8a85; border-radius: 2px;
-  background: repeating-linear-gradient(45deg, #4a4945 0 2px, #bdbcb4 2px 5px);
-}
 
 .notes { color: var(--muted); font-size: 11.5px; padding: 0 4px 4px; }
 .notes ul { padding-left: 16px; list-style: disc; }

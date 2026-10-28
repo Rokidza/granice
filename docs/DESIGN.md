@@ -151,3 +151,17 @@ Planeri ne smatraju Staze na 0 m (npr. cesta koja prelazi granicu) nužno najriz
 - **Krugovi:** polumjer kruga na karti računao se za pločice od 256 px, pa je krug bio upola manji od zamišljenog i nije obuhvaćao veća područja, a broj nije stajao na rubu kruga. Ispravljeno za MapLibre (512 px).
 - **Ikone:** Izravni prelazak i Službeni prijelaz crtaju se dvostruko većima (oko 22 px pri pogledu na cijelu granicu, 36 px na razini ulica), oznake rangova su veće.
 - **Crvena u svijetloj temi** je `#c73751` umjesto `#d7263d`: gotovo ista, a uz daltonizam (protanopija, deuteranopija) ostaje odvojena od smeđih makadama i staza. Provjerava `npm run check-colors`.
+
+## Izmjene prikaza (tri skupine, suptilniji prikaz)
+
+Karta je bila prenapučena: crveni segmenti, crveni obrubi cesta, crtkani pješački prijelazi svih parova i gusta šrafura. Zamjenjuje odjeljak „Raspon udaljenosti" za prikaz; izračun je proširen na sve Staze.
+
+- **Izračun uključuje sve Staze** (`RISK_CATEGORIES`: cesta, makadam, staza), ne samo ceste. Izravni prelazak sada pamti koja Staza prelazi granicu i gdje (`Crossing` u `risk.py`).
+- **Tri skupine**, svaka svoj odjeljak u lijevom izborniku i svoja oznaka na karti:
+  1. **Izravni prelasci**: popis svih Staza koje presijecaju granicu izvan Službenog prijelaza (ceste prve, zatim makadami i staze, duž granice). Oznaka je mali crni trokut s uskličnikom na samom mjestu prelaska.
+  2. **Kritična područja: blizu granice**: nizovi susjednih segmenata čiji je najbliži par Staza unutar praga, bez vodotoka između. Oznaka je mala crvena kapljica na granici, na sredini područja.
+  3. **Kritična područja: preko rijeke**: isto, ali spojnica para siječe vodotok. Plava kapljica.
+- **Jedan klizač** „Blizina staza" određuje gornju granicu udaljenosti para (zadano 500 m); donje granice nema. Rijeka ne mijenja prag, nego samo skupinu.
+- **Bez crvenila na karti:** nema obojenih segmenata, halo obruba cesta ni crtkanih veza svih parova. Kad planer odabere područje (popis ili klik na kapljicu), označe se njegovi segmenti tankom žutom crtom, a prikaže se najbliži par staza i put pješice između njih. Policajac sam vidi zašto je područje kritično.
+- **Suptilniji osnovni sloj:** tanje i prozirnije ceste, makadami i staze, uža i blijeda plava Riječna granica, tanja granična linija, rjeđa magla (30 %), a „Nedovoljno podataka" je tanka točkasta crta umjesto šrafure. Kapljice koje bi se preklapale izostavljaju se (duža područja imaju prednost), pa se pri pogledu na cijelu granicu vide samo najveća.
+- Slojevi se i dalje mogu uključivati i isključivati; svaka skupina ima svoju oznaku.

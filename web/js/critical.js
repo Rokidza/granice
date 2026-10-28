@@ -1,46 +1,41 @@
-// Kritična područja computed in the browser from the band of pair distances the planner picks
-// (e.g. 1000–1200 m). The pipeline's kriticna_podrucja.geojson (risk.py, _kriticna_podrucja) still
-// uses its index threshold and is meant for other tools; the page does not read it.
+// The three groups the page shows, computed in the browser from the segments of the corridor the
+// planner picked (pojasevi/<m>.json) and one limit on the distance of the nearest pair of Staze:
+//   izravni  Izravni prelazak: a Staza crosses the border outside a Službeni prijelaz. Listed from
+//            prijelazi.geojson, independent of the limit.
+//   kopno    Kritično područje: Staze on both sides come within the limit, no water between them.
+//   rijeka   Kritično područje where a river (rijeka flag of the segment) lies between the pair.
+// The pipeline's kriticna_podrucja.geojson (risk.py, _kriticna_podrucja) still uses its index
+// threshold and is meant for other tools; the page does not read it.
+
+export const CATEGORIES = ["kopno", "rijeka"];
 
 /**
- * Whether a segment is assessed and its nearest pair of Staze lies within the band, both ends
- * included. With `skipRiver` a segment on Riječna granica (`na_rijeci`) never is. `bandFilter` in app.js is the same test as a map expression; keep the two in step.
- * @param {{minM: number, maxM: number, skipRiver?: boolean}} band
+ * Whether a segment is assessed, is no Izravni prelazak and its nearest pair of Staze lies within
+ * the limit. With `skipRiver` a segment on Riječna granica (`na_rijeci`) never is.
+ * @param {{maxM: number, skipRiver?: boolean}} band
  */
-export function inBand(p, band) {
-  return p.stanje === "procijenjen" && p.udaljenost_m >= band.minM && p.udaljenost_m <= band.maxM
-    && !(band.skipRiver && p.na_rijeci);
+export function inReach(p, band) {
+  return p.stanje === "procijenjen" && !p.izravni_prelazak && p.udaljenost_m >= TOUCHING_M
+    && p.udaljenost_m <= band.maxM && !(band.skipRiver && p.na_rijeci);
 }
 
-/**
- * The Staze of the nearest pairs of segments within the band, per Strana: OSM way id → how far
- * from the border its end of the pair lies, one value per segment it is the nearest Staza of.
- * @returns {{HR: Map<number, number[]>, BiH: Map<number, number[]>}}
- */
-export function includedStaze(segments, band) {
-  const included = { HR: new Map(), BiH: new Map() };
-  for (const { properties: p } of segments) {
-    if (!inBand(p, band)) continue;
-    for (const [strana, prefix] of [["HR", "hr"], ["BiH", "bih"]]) {
-      const id = p[`${prefix}_staza_id`];
-      const distances = included[strana].get(id) ?? [];
-      distances.push(p[`${prefix}_od_granice_m`]);
-      included[strana].set(id, distances);
-    }
-  }
-  return included;
-}
+// A pair closer than this touches: one Staza crosses the border, and the crossing lies in the
+// neighbouring segment (the Izravni prelazak), so it is no Kritično područje of its own.
+const TOUCHING_M = 1;
+
+/** "rijeka" when the nearest pair has water between it, else "kopno". */
+export const categoryOf = (p) => (p.rijeka ? "rijeka" : "kopno");
 
 /**
- * The walking links of the nearest pairs within the band: where one would cross the border on foot
+ * The walking links of the nearest pairs within the limit: where one would cross the border on foot
  * from the BiH road to the HR road. Adjacent segments often share a pair, so each link comes once,
- * with the ids of the segments it makes red.
+ * with the ids of the segments it belongs to.
  * @returns {{hr: number[], bih: number[], distanceM: number, segmentIds: string[]}[]}
  */
 export function crossingLinks(segments, band) {
   const links = new Map();
   for (const { properties: p } of segments) {
-    if (!inBand(p, band) || !p.hr_tocka || !p.bih_tocka) continue;
+    if (!inReach(p, band) || !p.hr_tocka || !p.bih_tocka) continue;
     const key = `${p.hr_tocka}|${p.bih_tocka}`;
     const link = links.get(key) ?? { hr: p.hr_tocka, bih: p.bih_tocka, distanceM: p.udaljenost_m, segmentIds: [] };
     link.segmentIds.push(p.id);
@@ -50,8 +45,10 @@ export function crossingLinks(segments, band) {
 }
 
 /**
- * Runs of adjacent segments within the band, longest first and then by the closest pair.
+ * Runs of adjacent segments within the limit, per category, longest first and then by the closest
+ * pair. A run ends where the category changes.
  * @param {object[]} segments GeoJSON features from segmenti.geojson
+ * @returns {{kopno: object[], rijeka: object[]}}
  */
 export function kriticnaPodrucja(segments, band) {
   const ordered = [...segments].sort(
@@ -61,29 +58,38 @@ export function kriticnaPodrucja(segments, band) {
   let previous = null;
   for (const segment of ordered) {
     const p = segment.properties;
-    if (!inBand(p, band)) {
+    if (!inReach(p, band)) {
       previous = null;
       continue;
     }
-    if (previous && previous.lanac === p.lanac && previous.red + 1 === p.red) {
+    if (previous && previous.lanac === p.lanac && previous.red + 1 === p.red
+      && categoryOf(previous) === categoryOf(p)) {
       runs[runs.length - 1].push(segment);
     } else {
       runs.push([segment]);
     }
     previous = p;
   }
-  const areas = runs.map((run) => ({
-    lanac: run[0].properties.lanac,
-    firstSegment: run[0].properties.id,
-    lastSegment: run[run.length - 1].properties.id,
-    segmentCount: run.length,
-    lengthM: run.reduce((sum, s) => sum + s.properties.duljina_m, 0),
-    minDistanceM: Math.min(...run.map((s) => s.properties.udaljenost_m)),
-    maxDistanceM: Math.max(...run.map((s) => s.properties.udaljenost_m)),
-    segments: run,
-  }));
-  areas.sort((a, b) => b.lengthM - a.lengthM || a.minDistanceM - b.minDistanceM);
-  return areas.map((area, i) => ({ rang: i + 1, ...area }));
+  const areas = { kopno: [], rijeka: [] };
+  for (const run of runs) {
+    const middle = run[Math.floor((run.length - 1) / 2)].geometry.coordinates;
+    areas[categoryOf(run[0].properties)].push({
+      lanac: run[0].properties.lanac,
+      firstSegment: run[0].properties.id,
+      lastSegment: run[run.length - 1].properties.id,
+      segmentCount: run.length,
+      lengthM: run.reduce((sum, s) => sum + s.properties.duljina_m, 0),
+      minDistanceM: Math.min(...run.map((s) => s.properties.udaljenost_m)),
+      maxDistanceM: Math.max(...run.map((s) => s.properties.udaljenost_m)),
+      marker: middle[Math.floor(middle.length / 2)], // on the border, in the middle of the area
+      segments: run,
+    });
+  }
+  for (const [kategorija, list] of Object.entries(areas)) {
+    list.sort((a, b) => b.lengthM - a.lengthM || a.minDistanceM - b.minDistanceM);
+    list.forEach((area, i) => Object.assign(area, { kategorija, rang: i + 1, id: `${kategorija}-${i + 1}` }));
+  }
+  return areas;
 }
 
 /**
@@ -101,15 +107,4 @@ export function areaBounds(area, { withPairs = false } = {}) {
     [Math.min(...lons), Math.min(...lats)],
     [Math.max(...lons), Math.max(...lats)],
   ];
-}
-
-const METRES_PER_DEGREE = 111320;
-
-/** Circle around an area, for marking it on the map: centre in degrees, radius in metres. */
-export function areaCircle(area) {
-  const [[west, south], [east, north]] = areaBounds(area);
-  const lat = (south + north) / 2;
-  const dx = ((east - west) / 2) * METRES_PER_DEGREE * Math.cos((lat * Math.PI) / 180);
-  const dy = ((north - south) / 2) * METRES_PER_DEGREE;
-  return { lon: (west + east) / 2, lat, radiusM: Math.max(350, Math.hypot(dx, dy) * 1.15 + 150) };
 }

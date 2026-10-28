@@ -26,7 +26,7 @@ from granice.risk import (
 )
 from granice.river_border import RiverStretch, river_segments
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 COORD_DECIMALS = 5  # about 1 m
 
 CHOICES_DIR = "pojasevi"  # one file per precomputed max_border_distance_m
@@ -182,6 +182,8 @@ def _segment_properties(prepared: Prepared, segment: SegmentGranice) -> dict[str
         properties[f"{prefix}_staza_naziv"] = tags.get(way_id or -1, {}).get("name")
         properties[f"{prefix}_staza_kategorija"] = category
         properties[f"{prefix}_od_granice_m"] = _round(border_distance, 1)
+    properties["prelazak_staza_id"] = segment.crossing and segment.crossing.way_id
+    properties["prelazak_kategorija"] = segment.crossing and segment.crossing.category
     link = segment.link and transform(prepared.to_wgs84.transform, segment.link)
     properties["hr_tocka"] = link and _rounded(list(link.coords[0]))
     properties["bih_tocka"] = link and _rounded(list(link.coords[-1]))
@@ -201,15 +203,20 @@ def _prijelazi(prepared: Prepared, assessment: Assessment) -> dict[str, Any]:
         for lon, lat in prepared.sluzbeni_prijelazi_wgs84
     ]
     for segment in assessment.segments:
-        if "izravni_prelazak" in segment.flags:
-            midpoint = segment.geometry.interpolate(0.5, normalized=True)
+        crossing = segment.crossing
+        if "izravni_prelazak" in segment.flags and crossing is not None:
+            tags = prepared.way_tags.get(crossing.way_id, {})
             features.append(
                 _feature(
                     prepared.to_wgs84,
-                    midpoint,
+                    crossing.point,
                     {
                         "tip": "izravni_prelazak",
                         "segment": segment_id(segment.chain, segment.order),
+                        "staza_id": crossing.way_id,
+                        "kategorija": crossing.category,
+                        "naziv": tags.get("name"),
+                        "highway": tags.get("highway"),
                     },
                 )
             )

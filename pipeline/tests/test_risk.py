@@ -160,6 +160,18 @@ def test_staza_crossing_the_border_gives_izravni_prelazak_with_highest_risk() ->
     assert "izravni_prelazak" not in second.flags
 
 
+def test_izravni_prelazak_names_the_staza_and_where_it_crosses() -> None:
+    result = assess_crossing_risk(
+        RiskInput(border=[BORDER], staze=crossing_staze(7, 250)), Params()
+    )
+
+    crossing = result.segments[0].crossing
+    assert crossing is not None
+    assert (crossing.way_id, crossing.category) == (7, "makadam")
+    assert (crossing.point.x, crossing.point.y) == pytest.approx((250, 0))
+    assert result.segments[1].crossing is None
+
+
 def test_two_staze_that_merely_come_close_are_not_izravni_prelazak() -> None:
     result = assess_crossing_risk(
         RiskInput(border=[BORDER], staze=[hr(1, 100), bih(2, -100)]), Params()
