@@ -1208,7 +1208,6 @@ function setupHover() {
       content = road ? includedTooltip(road.properties) : null;
     }
     if (!content && hit(event.point, "rijecna-granica")) content = riverTooltip();
-    state.hoverTooltipShown = Boolean(content);
     if (content) tooltip.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
     else tooltip.remove();
   });
@@ -1297,7 +1296,47 @@ function setupPanelToggle() {
   if (window.matchMedia("(max-width: 760px)").matches) set(true);
 }
 
-/** The clicked point as "lat, lon" with a link that searches it on Google Maps. */
+/** A press that stays in place for a moment shows the coordinates of the point with a Google Maps link. */
+let coordsPopup = null;
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP_PX = 6;
+
+function setupLongPress(closeOther) {
+  const { map } = state;
+  let timer = null;
+  let start = null;
+  const cancel = () => {
+    clearTimeout(timer);
+    start = null;
+  };
+  const press = (event) => {
+    coordsPopup?.remove();
+    state.longPressed = false;
+    cancel();
+    if (state.measure.active || event.originalEvent?.button > 0) return;
+    start = event.point;
+    const { lngLat } = event;
+    timer = setTimeout(() => {
+      state.longPressed = true;
+      closeOther();
+      coordsPopup = new globalThis.maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "coords-popup" })
+        .setLngLat(lngLat).setDOMContent(coordinatesRow(lngLat)).addTo(map);
+    }, LONG_PRESS_MS);
+  };
+  const move = (event) => {
+    if (start && Math.hypot(event.point.x - start.x, event.point.y - start.y) > LONG_PRESS_SLOP_PX) cancel();
+  };
+  map.on("mousedown", press);
+  map.on("touchstart", press);
+  map.on("mousemove", move);
+  map.on("touchmove", move);
+  map.on("mouseup", cancel);
+  map.on("touchend", cancel);
+  map.on("dragstart", cancel);
+  map.on("zoomstart", cancel);
+}
+
+/** The point as "lat, lon" with a link that searches it on Google Maps. */
 function coordinatesRow(lngLat) {
   const text = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
   const row = element("div", undefined, "coords");
@@ -1315,19 +1354,24 @@ function coordinatesRow(lngLat) {
 function setupClicks() {
   const { map } = state;
   let popup = null;
-  const open = (lngLat, content, at = lngLat, compact = false) => {
-    content.append(coordinatesRow(at));
+  const open = (lngLat, content) => {
     popup?.remove();
-    popup = new globalThis.maplibregl.Popup({ maxWidth: "340px", closeButton: !compact, className: compact ? "coords-popup" : "" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    popup = new globalThis.maplibregl.Popup({ maxWidth: "340px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
   };
+  setupLongPress(() => popup?.remove());
   map.on("click", (event) => {
     if (state.measure.active) return; // clicks set measuring points instead
+    if (state.longPressed) { // the click that ends a long press only shows the coordinates
+      state.longPressed = false;
+      return;
+    }
+    coordsPopup?.remove();
     const box = [[event.point.x - 7, event.point.y - 7], [event.point.x + 7, event.point.y + 7]];
     const icons = map.queryRenderedFeatures(box, { layers: ["prijelazi-sluzbeni"] });
     if (icons.length) {
       const root = element("div", undefined, "popup");
       root.append(element("h3", "Službeni prijelaz"), element("p", "Službeni prijelaz (OSM barrier=border_control). Susjedni segmenti izuzeti su iz procjene rizika."));
-      open(icons[0].geometry.coordinates, root, event.lngLat);
+      open(icons[0].geometry.coordinates, root);
       return;
     }
     const hits = map.queryRenderedFeatures(box, { layers: SEGMENT_LAYERS });
@@ -1337,7 +1381,6 @@ function setupClicks() {
       for (const button of document.querySelectorAll(".area-button[aria-current]")) button.removeAttribute("aria-current");
       state.selectedPair = null;
       highlightPair(null);
-      open(event.lngLat, element("div", undefined, "popup"), event.lngLat, true);
       return;
     }
     const { properties } = hits[0];
@@ -1346,27 +1389,12 @@ function setupClicks() {
   });
   // Live coordinates of the mouse, small, in the top right corner.
   const live = $("cursor-coords");
-  // Holding the mouse still for a moment shows the coordinates next to it (unless another tooltip is up).
-  const dwell = new globalThis.maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, anchor: "top-left", className: "coords-popup dwell-popup" });
-  let dwellTimer = null;
-  const stopDwell = () => {
-    clearTimeout(dwellTimer);
-    dwell.remove();
-  };
   map.on("mousemove", (event) => {
     live.textContent = `${event.lngLat.lat.toFixed(5)}, ${event.lngLat.lng.toFixed(5)}`;
     live.hidden = false;
-    stopDwell();
-    if (state.measure.active) return;
-    dwellTimer = setTimeout(() => {
-      if (state.hoverTooltipShown) return;
-      dwell.setLngLat(event.lngLat).setText(live.textContent).addTo(map);
-    }, 600);
   });
-  map.on("movestart", stopDwell);
   map.getCanvas().addEventListener("mouseleave", () => {
     live.hidden = true;
-    stopDwell();
   });
 }
 
