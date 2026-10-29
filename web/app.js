@@ -328,21 +328,21 @@ function dataLayers(theme) {
     })),
     // Walking links of the nearest pairs of the chosen Kritično područje: from the BiH road across
     // the border to the HR road, tied to the border by a dotted line when they lie farther away.
-    // The shortest link between two Staze, before anything is chosen: a thin dashed white line over
-    // a dark casing with a dot at each end, a measuring line that does not cover the imagery.
+    // The shortest link between two Staze, before anything is chosen: a faint, thin white line whose
+    // dashes drift slowly (setupLinkAnimation), so it reads as a possible way and no real line.
     { id: "zona-veze-casing", type: "line", source: "zona-veze", filter: ["==", ["geometry-type"], "LineString"],
       minzoom: 12.5, layout: { "line-cap": "round" },
-      paint: { "line-color": "#141413", "line-width": zoomScaled(3.4),
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.55] } },
+      paint: { "line-color": "#141413", "line-width": zoomScaled(2.6),
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.18] } },
     { id: "zona-veze", type: "line", source: "zona-veze", filter: ["==", ["geometry-type"], "LineString"],
       minzoom: 12.5, layout: { "line-cap": "butt" },
-      paint: { "line-color": "#ffffff", "line-width": zoomScaled(1.6), "line-dasharray": [2, 1.5],
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 1] } },
+      paint: { "line-color": "#ffffff", "line-width": zoomScaled(1.2), "line-dasharray": [3, 4],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.5] } },
     { id: "zona-veze-tocke", type: "circle", source: "zona-veze", filter: ["==", ["geometry-type"], "Point"],
-      minzoom: 12.5, paint: { "circle-color": "#ffffff", "circle-radius": ["interpolate", ["linear"], ["zoom"], 12.5, 1.5, 16, 3.2],
-        "circle-stroke-color": "#141413", "circle-stroke-width": 1,
-        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 1],
-        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.8] } },
+      minzoom: 12.5, paint: { "circle-color": "#ffffff", "circle-radius": ["interpolate", ["linear"], ["zoom"], 12.5, 1.2, 16, 2.4],
+        "circle-stroke-color": "#141413", "circle-stroke-width": 0.8,
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.5],
+        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.2] } },
     { id: "par-odabir", type: "line", source: "par-hover", filter: ["==", ["get", "vrsta"], "par"],
       layout: { "line-cap": "round" },
       paint: { "line-color": "#ffffff", "line-width": zoomScaled(12), "line-opacity": 0.65 } },
@@ -864,6 +864,27 @@ function renderSkipRiver() {
   detail.textContent = state.skipRiver
     ? `Uključeno: izostavljeno ${onRiver} ${noun} na rijeci.`
     : `Isključeno: ${onRiver} ${noun} unutar praga ${plural(onRiver, "leži", "leže", "leži")} na rijeci.`;
+}
+
+// Dashes of the links drifting along them, by stepping the dash array (MapLibre cannot animate it).
+const LINK_DASH_STEPS = [
+  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0],
+  [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5],
+];
+
+function setupLinkAnimation() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const { map } = state;
+  let step = -1;
+  const tick = (time) => {
+    const next = Math.floor(time / 140) % LINK_DASH_STEPS.length;
+    if (next !== step && map.getLayer("zona-veze") && map.getZoom() >= 12.5 && !document.hidden) {
+      step = next;
+      map.setPaintProperty("zona-veze", "line-dasharray", LINK_DASH_STEPS[step]);
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 function setupSkipRiver() {
@@ -1778,6 +1799,7 @@ async function start() {
     showBasemap(state.basemap);
     setupClicks();
     setupHover();
+    setupLinkAnimation();
     setupMeasure();
     setupCorridorChoice(firstCorridor !== null);
     setupSkipRiver();
