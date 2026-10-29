@@ -927,10 +927,12 @@ function clearSelection() {
  * and the links between them, and the pair of the closest one stays highlighted with its labels. */
 function select({ segmentIds, area = null }) {
   clearSelection();
-  const filter = ["in", ["get", "id"], ["literal", segmentIds]];
-  state.map.setFilter("segmenti-odabir", filter);
-  state.map.setFilter("segmenti-odabir-casing", filter);
-  if (!area) return;
+  if (!area) { // an Izravni prelazak marks its segment; an area leaves the border as it is
+    const filter = ["in", ["get", "id"], ["literal", segmentIds]];
+    state.map.setFilter("segmenti-odabir", filter);
+    state.map.setFilter("segmenti-odabir-casing", filter);
+    return;
+  }
   state.selectedPair = closestPairSegment(area);
   state.map.getSource("parovi").setData(linksData(crossingLinks(area.segments, state.band)));
   highlightPair();
@@ -1058,13 +1060,6 @@ function renderAreasSummary(kategorija) {
   }
 }
 
-/** The two Staze of the closest pair of an area, "BiH … ↔ HR …", with how many more pairs it has. */
-function pairText(area) {
-  const p = closestPairSegment(area).properties;
-  const others = crossingLinks(area.segments, state.band).length - 1;
-  return `BiH ${roadName(p, "bih")} ↔ HR ${roadName(p, "hr")}${others > 0 ? ` (+${others} ${plural(others, "par", "para", "para")})` : ""}`;
-}
-
 /** One button per Kritično područje, longest first, naming the pair of Staza that makes it: a click
  * flies the map to it. */
 function renderAreaList(kategorija) {
@@ -1075,15 +1070,14 @@ function renderAreaList(kategorija) {
     button.type = "button";
     button.dataset.id = area.id;
     const p = closestPairSegment(area).properties;
-    const roads = pairText(area);
     const text = element("span", undefined, "area-text");
     const head = element("span", undefined, "area-head");
     head.append(element("strong", `par staza ${metres(p.udaljenost_m)}`), element("span", ` · ${kilometres(area.lengthM)} granice`));
     const where = element("small", undefined, "area-place");
-    text.append(head, where, element("small", roads));
+    text.append(head, where);
     fillPlaceWhenSeen(where, button, areaPoint(area));
     button.append(element("span", String(area.rang), "area-rank"), text);
-    button.setAttribute("aria-label", `Područje ${area.rang}: par staza na ${metres(p.udaljenost_m)}, ${roads}, ${kilometres(area.lengthM)} granice. Prikaži na karti.`);
+    button.setAttribute("aria-label", `Područje ${area.rang}: par staza na ${metres(p.udaljenost_m)}, ${kilometres(area.lengthM)} granice. Prikaži na karti.`);
     button.addEventListener("click", () => showArea(area, { fly: true }));
     const item = element("li");
     item.append(button);
@@ -1101,7 +1095,7 @@ function renderAreaLists() {
 /** What kind of way an Izravni prelazak is: its OSM name, else the kind of way it is. */
 function crossingName(p) {
   if (p.naziv) return `„${p.naziv}”`;
-  return `${HIGHWAY_LABELS[p.highway] ?? CATEGORY_LABELS[p.kategorija] ?? "staza"} bez naziva`;
+  return HIGHWAY_LABELS[p.highway] ?? CATEGORY_LABELS[p.kategorija] ?? "staza";
 }
 
 const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -1165,9 +1159,9 @@ function renderCrossingList() {
     const text = element("span", undefined, "area-text");
     const head = element("span", undefined, "area-head");
     head.append(element("strong", capitalized(crossingName(p))));
-    const where = element("small", capitalized(CATEGORY_LABELS[p.kategorija] ?? "staza"));
+    const where = element("small");
     text.append(head, where);
-    fillPlaceWhenSeen(where, button, feature.geometry.coordinates, ` · ${CATEGORY_LABELS[p.kategorija] ?? "staza"}`);
+    fillPlaceWhenSeen(where, button, feature.geometry.coordinates);
     button.append(element("span", String(i + 1), "area-rank"), text);
     button.setAttribute("aria-label", `Izravni prelazak ${i + 1}: ${crossingName(p)}. Prikaži na karti.`);
     button.addEventListener("click", () => showCrossing(feature));
@@ -1284,7 +1278,7 @@ function crossingPopup(feature, { compact = false } = {}) {
   const root = element("div", undefined, "popup why");
   root.append(
     element("strong", "Izravni prelazak"),
-    element("p", `${capitalized(crossingName(p))} · ${CATEGORY_LABELS[p.kategorija] ?? "staza"}`, "muted"),
+    element("p", capitalized(crossingName(p)), "muted"),
   );
   if (compact) return root;
   root.append(
@@ -1421,9 +1415,17 @@ function paintOverview(theme) {
 function setupOverview(granica, bounds) {
   const { map } = state;
   const box = $("overview");
+  const satellite = state.basemaps.find((def) => def.id === "satelit");
   const overview = new globalThis.maplibregl.Map({
     container: "overview", interactive: false, attributionControl: false, bounds, fitBoundsOptions: { padding: 10 },
-    style: { version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": SURFACES[mapTheme()] } }] },
+    style: {
+      version: 8,
+      sources: satellite ? { satelit: { type: "raster", tiles: satellite.tiles, tileSize: satellite.tileSize, maxzoom: 8 } } : {},
+      layers: [
+        { id: "background", type: "background", paint: { "background-color": SURFACES[mapTheme()] } },
+        ...(satellite ? [{ id: "satelit", type: "raster", source: "satelit" }] : []),
+      ],
+    },
   });
   state.overview = overview;
   // The view of the main map, grown to a minimum size.
