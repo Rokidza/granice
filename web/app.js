@@ -328,12 +328,21 @@ function dataLayers(theme) {
     })),
     // Walking links of the nearest pairs of the chosen Kritično područje: from the BiH road across
     // the border to the HR road, tied to the border by a dotted line when they lie farther away.
-    // The shortest link between two Staze: a wide pale band with a thin dark dashed line in it, so
-    // it reads on dark forest and on light maps alike and is no red line among the red roads.
-    { id: "zona-veze", type: "line", source: "zona-veze", filter: ["==", ["geometry-type"], "LineString"],
+    // The shortest link between two Staze, before anything is chosen: a thin dashed white line over
+    // a dark casing with a dot at each end, a measuring line that does not cover the imagery.
+    { id: "zona-veze-casing", type: "line", source: "zona-veze", filter: ["==", ["geometry-type"], "LineString"],
       minzoom: 12.5, layout: { "line-cap": "round" },
-      paint: { "line-color": "#ffffff", "line-width": zoomScaled(9),
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.5] } },
+      paint: { "line-color": "#141413", "line-width": zoomScaled(3.4),
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.55] } },
+    { id: "zona-veze", type: "line", source: "zona-veze", filter: ["==", ["geometry-type"], "LineString"],
+      minzoom: 12.5, layout: { "line-cap": "butt" },
+      paint: { "line-color": "#ffffff", "line-width": zoomScaled(1.6), "line-dasharray": [2, 1.5],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 1] } },
+    { id: "zona-veze-tocke", type: "circle", source: "zona-veze", filter: ["==", ["geometry-type"], "Point"],
+      minzoom: 12.5, paint: { "circle-color": "#ffffff", "circle-radius": ["interpolate", ["linear"], ["zoom"], 12.5, 1.5, 16, 3.2],
+        "circle-stroke-color": "#141413", "circle-stroke-width": 1,
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 1],
+        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, 0.8] } },
     { id: "par-odabir", type: "line", source: "par-hover", filter: ["==", ["get", "vrsta"], "par"],
       layout: { "line-cap": "round" },
       paint: { "line-color": "#ffffff", "line-width": zoomScaled(12), "line-opacity": 0.65 } },
@@ -365,7 +374,7 @@ const LAYER_GROUPS = [
   { id: "kopno", label: "Blizu granice", hint: "Kritična područja: putovi s obje strane granice blizu su jedan drugome", layers: ["podrucja-kopno"] },
   { id: "preko-rijeke", label: "Preko rijeke", hint: "Kritična područja gdje se mora prijeći rijeku", layers: ["podrucja-rijeka"] },
   { id: "zona", label: "Zona područja", hint: "Putovi najbližih parova, vidljivi tek pri većem zumu",
-    layers: ["staze-zona", "zona-veze"] },
+    layers: ["staze-zona", "zona-veze-casing", "zona-veze", "zona-veze-tocke"] },
   { id: "odabir", label: "Odabrano područje", hint: "Najbliži par staza i pješački prijelaz odabranog područja",
     layers: [
       "staze-par", "par-odabir", "parovi-casing", "parovi-linija",
