@@ -24,10 +24,11 @@ export const ROAD_STYLES = {
   },
 };
 
-// The Granična linija: dash-dot, neutral, drawn over a casing of the opposite lightness.
+// The Granična linija: dash-dot in a colour no road has (roads are white, grey and yellow-brown),
+// drawn over a dark casing.
 export const BORDER_COLORS = {
-  light: { line: "#1f1f1e", casing: "#ffffff" },
-  dark: { line: "#f4f2ec", casing: "#0d0d0d" },
+  light: { line: "#c0149a", casing: "#ffffff" },
+  dark: { line: "#ff3fd8", casing: "#1a0716" },
 };
 
 // Kritično područje blizu granice and the highlighted pair of Staze of a chosen area.

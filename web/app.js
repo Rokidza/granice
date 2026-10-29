@@ -306,9 +306,9 @@ function dataLayers(theme) {
     { id: "segmenti-prijelaz", type: "line", source: "segmenti", filter: stanjeIs("sluzbeni_prijelaz"),
       paint: { ...colors["segmenti-prijelaz"], "line-width": zoomScaled(2), "line-opacity": 0.6 } },
     { id: "granica-casing", type: "line", source: "granica",
-      paint: { ...colors["granica-casing"], "line-width": 3.6, "line-opacity": 0.6 } },
+      paint: { ...colors["granica-casing"], "line-width": 4.4, "line-opacity": 0.75 } },
     { id: "granica", type: "line", source: "granica",
-      paint: { ...colors.granica, "line-width": 1.8, "line-dasharray": [5, 2, 1.2, 2] } },
+      paint: { ...colors.granica, "line-width": 2.4, "line-dasharray": [5, 2, 1.2, 2] } },
     { id: "prijelazi-sluzbeni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "sluzbeni_prijelaz"],
       minzoom: 9,
@@ -446,6 +446,10 @@ async function basemapParts(def, theme) {
     for (const layer of style.layers) {
       if (!["place", "water_name", "boundary"].includes(layer["source-layer"])) continue;
       const copy = { ...layer, id: `bm-lab-${layer.id}`, source: `bm-lab-${layer.source}` };
+      if (layer.type === "symbol") {
+        // The style's grey names are made for its dark map: light text with a dark halo on imagery.
+        copy.paint = { ...layer.paint, "text-color": "#ffffff", "text-halo-color": "rgba(0,0,0,0.85)", "text-halo-width": 1.6, "text-halo-blur": 0.5 };
+      }
       if (layer["source-layer"] === "boundary") {
         copy.filter = layer.filter ? ["all", layer.filter, notThatBorder] : notThatBorder;
         // The style's grey lines are made for a map, not for imagery: thin and light instead.
