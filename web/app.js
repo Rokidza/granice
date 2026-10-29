@@ -57,7 +57,6 @@ const CATEGORY_STYLE = {
 };
 const FIRST_DATA_LAYER = "staze-par"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
-const BORDER_COLOR_STORAGE_KEY = "granice.boja-granice";
 const SKIP_RIVER_STORAGE_KEY = "granice.bez-rijeke";
 // Camera moves to a chosen place: a steady glide in and out of the zoom, not a fly-out-and-back jump.
 const GLIDE = { linear: true, duration: 1800, essential: true };
@@ -88,7 +87,6 @@ const state = {
   hasLocalBasemap: false,
   hasGlyphs: false,
   basemaps: [],
-  borderColor: null, // colour of the Granična linija picked in the panel; null = the theme's own
   basemap: null, // the chosen entry of `basemaps`
   basemapIds: [], // layers and sources currently added for it
   basemapSources: [],
@@ -221,14 +219,9 @@ const FOG_OPACITY = 0.35;
 const corridorWidth = (metres) => ["interpolate", ["exponential", 2], ["zoom"],
   8, (2 * metres * 2 ** 8) / 110700, 18, (2 * metres * 2 ** 18) / 110700];
 
-/** The border line colours: the colour the planner picked, else the theme's own. */
-const borderPalette = (theme) => (state.borderColor
-  ? { ...BORDER_COLORS[theme], line: state.borderColor }
-  : BORDER_COLORS[theme]);
-
 /** Paint properties that depend on the colour theme, by layer id. */
 function themedPaint(theme) {
-  const border = borderPalette(theme);
+  const border = BORDER_COLORS[theme];
   const paint = {
     background: { "background-color": SURFACES[theme] },
     "granica-casing": { "line-color": border.casing },
@@ -713,15 +706,15 @@ function renderLegend() {
       "Granica",
       legendRow(
         sample((svg) => {
-          sampleLine(svg, borderPalette(theme).casing, 4, { opacity: 0.5 });
-          sampleLine(svg, borderPalette(theme).line, 1.6, { dash: "7 3 2 3" });
+          sampleLine(svg, BORDER_COLORS[theme].casing, 4, { opacity: 0.5 });
+          sampleLine(svg, BORDER_COLORS[theme].line, 1.6, { dash: "7 3 2 3" });
         }),
         "Granična linija",
       ),
       legendRow(
         sample((svg) => {
           sampleLine(svg, RIVER[theme], 6, { opacity: 0.35 });
-          sampleLine(svg, borderPalette(theme).line, 1.6, { dash: "7 3 2 3" });
+          sampleLine(svg, BORDER_COLORS[theme].line, 1.6, { dash: "7 3 2 3" });
         }),
         "Granica na rijeci",
         "Granica teče rijekom ili uz vodu (do 75 m od nje).",
@@ -862,27 +855,6 @@ function renderSkipRiver() {
   detail.textContent = state.skipRiver
     ? `Uključeno: izostavljeno ${onRiver} ${noun} na rijeci.`
     : `Isključeno: ${onRiver} ${noun} unutar praga ${plural(onRiver, "leži", "leže", "leži")} na rijeci.`;
-}
-
-function setupBorderColor() {
-  const input = $("border-color");
-  try {
-    state.borderColor = localStorage.getItem(BORDER_COLOR_STORAGE_KEY) || null;
-  } catch { /* storage unavailable: the choice just is not remembered */ }
-  const show = () => { input.value = borderPalette(mapTheme()).line; };
-  const apply = (color) => {
-    state.borderColor = color;
-    try {
-      if (color) localStorage.setItem(BORDER_COLOR_STORAGE_KEY, color);
-      else localStorage.removeItem(BORDER_COLOR_STORAGE_KEY);
-    } catch { /* see above */ }
-    applyTheme();
-    show();
-  };
-  input.addEventListener("input", () => apply(input.value));
-  $("border-color-reset").addEventListener("click", () => apply(null));
-  applyTheme();
-  show();
 }
 
 function setupSkipRiver() {
@@ -1443,7 +1415,7 @@ function paintOverview(theme) {
   const { overview } = state;
   if (!overview?.getLayer("pregled-linija")) return;
   overview.setPaintProperty("background", "background-color", SURFACES[theme]);
-  overview.setPaintProperty("pregled-linija", "line-color", borderPalette(theme).line);
+  overview.setPaintProperty("pregled-linija", "line-color", BORDER_COLORS[theme].line);
   overview.setPaintProperty("pregled-okvir", "line-color", DANGER[theme]);
   overview.setPaintProperty("pregled-ispuna", "fill-color", DANGER[theme]);
 }
@@ -1799,7 +1771,6 @@ async function start() {
     setupHover();
     setupMeasure();
     setupCorridorChoice(firstCorridor !== null);
-    setupBorderColor();
     setupSkipRiver();
     setupTabs();
     setupPanelToggle();
