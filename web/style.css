@@ -327,3 +327,8 @@ main { position: absolute; inset: 0; }
 .popup.why .place { color: var(--ink); font-weight: 600; }
 .area-text .area-place:empty { display: none; }
 .area-text .area-place { color: var(--ink); font-weight: 600; }
+
+.color-row { display: flex; align-items: center; gap: 10px; color: var(--ink-2); }
+.color-row label { flex: 1; }
+.color-row input[type="color"] { width: 38px; height: 28px; padding: 0; border: 1px solid var(--line, rgba(0,0,0,.2)); border-radius: 6px; background: none; cursor: pointer; }
+.small-button { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--line, rgba(0,0,0,.2)); border-radius: 6px; background: transparent; color: var(--ink); cursor: pointer; }
