@@ -10,12 +10,13 @@
 export const CATEGORIES = ["kopno", "rijeka"];
 
 /**
- * Whether a segment is assessed, is no Izravni prelazak and its nearest pair of Staze lies within
+ * Whether a segment is assessed, is no Izravni prelazak, its nearest pair is not made of a Staza
+ * that itself crosses the border (`par_prelazi`) and its nearest pair of Staze lies within
  * the limit. With `skipRiver` a segment on Riječna granica (`na_rijeci`) never is.
  * @param {{maxM: number, skipRiver?: boolean}} band
  */
 export function inReach(p, band) {
-  return p.stanje === "procijenjen" && !p.izravni_prelazak && p.udaljenost_m >= TOUCHING_M
+  return p.stanje === "procijenjen" && !p.izravni_prelazak && !p.par_prelazi && p.udaljenost_m >= TOUCHING_M
     && p.udaljenost_m <= band.maxM && !(band.skipRiver && p.na_rijeci);
 }
 

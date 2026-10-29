@@ -863,6 +863,12 @@ const emptyCollection = () => ({ type: "FeatureCollection", features: [] });
 function recomputeAreas() {
   state.band = { maxM: Number($("band-max").value), skipRiver: state.skipRiver };
   $("band-value").textContent = bandText(state.band);
+  // A pair made of a Staza that crosses the border is that Izravni prelazak, not a Kritično područje.
+  const crossingWays = new Set(state.crossings.map((f) => f.properties.staza_id));
+  for (const feature of state.segments) {
+    const q = feature.properties;
+    q.par_prelazi = crossingWays.has(q.hr_staza_id) || crossingWays.has(q.bih_staza_id);
+  }
   state.areas = kriticnaPodrucja(state.segments, state.band);
   state.areaById = new Map(AREA_CATEGORIES.flatMap((kategorija) => state.areas[kategorija].map((area) => [area.id, area])));
   state.map.getSource("podrucja").setData(pinsData());
