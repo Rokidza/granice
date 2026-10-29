@@ -267,8 +267,8 @@ function dataLayers(theme) {
     // zoomed close, so the way a person would walk shows without anything being chosen.
     { id: "staze-zona", type: "line", source: "staze", filter: NO_ID,
       minzoom: 11.5, layout: { "line-cap": "round", "line-join": "round" },
-      paint: { ...colors["staze-zona"], "line-width": roadScaled(7),
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0, 13.5, 0.7] } },
+      paint: { ...colors["staze-zona"], "line-width": roadScaled(4.5),
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0, 13.5, 0.45] } },
   ];
   for (const category of CATEGORIES) {
     const style = CATEGORY_STYLE[category];
@@ -318,9 +318,9 @@ function dataLayers(theme) {
       paint: { ...colors["zona-sjaj"], "line-width": zoomScaled(16), "line-blur": 10,
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 9.5, 0, 12, 0.4] } },
     { id: "granica-casing", type: "line", source: "granica",
-      paint: { ...colors["granica-casing"], "line-width": 2.6, "line-opacity": 0.5 } },
+      paint: { ...colors["granica-casing"], "line-width": 3.6, "line-opacity": 0.6 } },
     { id: "granica", type: "line", source: "granica",
-      paint: { ...colors.granica, "line-width": 1.2, "line-dasharray": [5, 2, 1.2, 2] } },
+      paint: { ...colors.granica, "line-width": 1.8, "line-dasharray": [5, 2, 1.2, 2] } },
     // The segments of the chosen Kritično područje or Izravni prelazak, a thin yellow line over the
     // Granična linija so there is no doubt which.
     { id: "segmenti-odabir-casing", type: "line", source: "segmenti", filter: NO_SELECTION,

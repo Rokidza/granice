@@ -46,9 +46,8 @@ export default {
         tileSize: 256, maxzoom: 18,
       }],
     },
-    { id: "nema", label: "Bez podloge", short: "Prazno", kind: "none", palette: "system" },
   ],
-  defaultBasemap: "karta",
+  defaultBasemap: "satelit",
   // Default limit on the nearest-pair distance in metres: segments within it are grouped into
   // Kritična područja. The planner changes it in the sidebar.
   band: { maxM: 300 },
