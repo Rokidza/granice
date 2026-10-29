@@ -1446,8 +1446,6 @@ function paintOverview(theme) {
   if (!overview?.getLayer("pregled-linija")) return;
   overview.setPaintProperty("background", "background-color", SURFACES[theme]);
   overview.setPaintProperty("pregled-linija", "line-color", BORDER_COLORS[theme].line);
-  overview.setPaintProperty("pregled-okvir", "line-color", DANGER[theme]);
-  overview.setPaintProperty("pregled-ispuna", "fill-color", DANGER[theme]);
 }
 
 function setupOverview(granica, bounds) {
@@ -1487,8 +1485,8 @@ function setupOverview(granica, bounds) {
     overview.addSource("granica", { type: "geojson", data: granica });
     overview.addSource("okvir", { type: "geojson", data: frame() });
     overview.addLayer({ id: "pregled-linija", type: "line", source: "granica", paint: { "line-color": "#000", "line-width": 1.6 } });
-    overview.addLayer({ id: "pregled-ispuna", type: "fill", source: "okvir", paint: { "fill-color": "#c73751", "fill-opacity": 0.18 } });
-    overview.addLayer({ id: "pregled-okvir", type: "line", source: "okvir", paint: { "line-color": "#c73751", "line-width": 2 } });
+    overview.addLayer({ id: "pregled-ispuna", type: "fill", source: "okvir", paint: { "fill-color": "#ffffff", "fill-opacity": 0.22 } });
+    overview.addLayer({ id: "pregled-okvir", type: "line", source: "okvir", paint: { "line-color": "#ffffff", "line-width": 2 } });
     paintOverview(mapTheme());
     map.on("move", update);
     update();
