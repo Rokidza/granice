@@ -437,7 +437,23 @@ async function basemapParts(def, theme) {
       };
       layers.push({ id, type: "raster", source: id });
     });
-    return { sources, layers };
+    if (!def.labels) return { sources, layers };
+    // Place names and boundaries from a vector style, over the imagery.
+    const style = await fetchStyle(def.labels.style);
+    for (const [name, source] of Object.entries(style.sources)) sources[`bm-lab-${name}`] = source;
+    const [a, b] = def.labels.omitBorderBetween;
+    const notThatBorder = ["all", ["!=", ["get", "maritime"], 1], ["!", ["all", ["in", ["get", "adm0_l"], ["literal", [a, b]]], ["in", ["get", "adm0_r"], ["literal", [a, b]]]]]];
+    for (const layer of style.layers) {
+      if (!["place", "water_name", "boundary"].includes(layer["source-layer"])) continue;
+      const copy = { ...layer, id: `bm-lab-${layer.id}`, source: `bm-lab-${layer.source}` };
+      if (layer["source-layer"] === "boundary") {
+        copy.filter = layer.filter ? ["all", layer.filter, notThatBorder] : notThatBorder;
+        // The style's grey lines are made for a map, not for imagery: thin and light instead.
+        copy.paint = { ...layer.paint, "line-color": "#ffffff", "line-opacity": 0.6, "line-width": 1.2, "line-blur": 0 };
+      }
+      layers.push(copy);
+    }
+    return { sources, layers, glyphs: style.glyphs };
   }
   if (def.kind === "pmtiles") {
     const flavor = globalThis.basemaps.namedFlavor(theme);

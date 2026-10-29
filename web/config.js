@@ -40,11 +40,10 @@ export default {
       tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
       tileSize: 256, maxzoom: 18,
       attribution: "Esri, Maxar, Earthstar Geographics i GIS User Community",
-      // Place names and boundaries over the imagery, from the same server.
-      overlays: [{
-        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
-        tileSize: 256, maxzoom: 18,
-      }],
+      // Place names and the boundaries of other countries and entities over the imagery, drawn from
+      // the vector tiles of this style. Unlike the Esri overlay (which has its own HR-BiH line next to
+      // ours, baked into its image) it can leave that one border out.
+      labels: { style: "https://tiles.openfreemap.org/styles/dark", omitBorderBetween: ["HR", "BA"] },
     },
   ],
   defaultBasemap: "satelit",
