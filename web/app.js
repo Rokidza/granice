@@ -231,7 +231,6 @@ function themedPaint(theme) {
     granica: { "line-color": border.line },
     "staze-par": { "line-color": DANGER[theme] },
     "staze-zona": { "line-color": DANGER[theme] },
-    "zona-sjaj": { "line-color": ["case", ["get", "rijeka"], RIVER[theme], DANGER[theme]] },
     "parovi-tocke": { "circle-color": DANGER[theme], "circle-stroke-color": SURFACES[theme] },
     "par-veza": { "line-color": ink(theme) },
     "segmenti-nedovoljno": { "line-color": ink(theme) },
@@ -311,12 +310,6 @@ function dataLayers(theme) {
       paint: { ...colors["segmenti-sporna"], "line-width": zoomScaled(1.4), "line-opacity": 0.6, "line-dasharray": [2, 2] } },
     { id: "segmenti-prijelaz", type: "line", source: "segmenti", filter: stanjeIs("sluzbeni_prijelaz"),
       paint: { ...colors["segmenti-prijelaz"], "line-width": zoomScaled(2), "line-opacity": 0.6 } },
-    // A soft glow along the border of every Kritično područje (red, blue over a river): a zone,
-    // not a line.
-    { id: "zona-sjaj", type: "line", source: "segmenti", filter: NO_ID,
-      minzoom: 9.5, layout: { "line-cap": "round", "line-join": "round" },
-      paint: { ...colors["zona-sjaj"], "line-width": zoomScaled(16), "line-blur": 10,
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 9.5, 0, 12, 0.4] } },
     { id: "granica-casing", type: "line", source: "granica",
       paint: { ...colors["granica-casing"], "line-width": 3.6, "line-opacity": 0.6 } },
     { id: "granica", type: "line", source: "granica",
@@ -382,8 +375,8 @@ const LAYER_GROUPS = [
   { id: "izravni", label: "Izravni prelasci", hint: "Staze koje presijecaju granicu izvan službenog prijelaza", layers: ["prijelazi-izravni"] },
   { id: "kopno", label: "Blizu granice", hint: "Kritična područja: putovi s obje strane granice blizu su jedan drugome", layers: ["podrucja-kopno"] },
   { id: "preko-rijeke", label: "Preko rijeke", hint: "Kritična područja gdje se mora prijeći rijeku", layers: ["podrucja-rijeka"] },
-  { id: "zona", label: "Zona područja", hint: "Blagi sjaj uz granicu i putovi najbližih parova, vidljivi tek pri većem zumu",
-    layers: ["zona-sjaj", "staze-zona", "zona-veze"] },
+  { id: "zona", label: "Zona područja", hint: "Putovi najbližih parova, vidljivi tek pri većem zumu",
+    layers: ["staze-zona", "zona-veze"] },
   { id: "odabir", label: "Odabrano područje", hint: "Označeni segmenti, najbliži par staza i pješački prijelaz odabranog područja",
     layers: [
       "segmenti-odabir-casing", "segmenti-odabir", "staze-par", "par-odabir", "parovi-casing", "parovi-linija",
@@ -888,7 +881,6 @@ function drawZone(links) {
   const { map } = state;
   const members = AREA_CATEGORIES.flatMap((k) => state.areas[k].flatMap((a) => a.segments.map((s) => s.properties)));
   const ids = members.map((p) => p.id);
-  map.setFilter("zona-sjaj", ids.length ? ["in", ["get", "id"], ["literal", ids]] : NO_ID);
   const hr = new Set(members.map((p) => p.hr_staza_id));
   const bih = new Set(members.map((p) => p.bih_staza_id));
   map.setFilter("staze-zona", ids.length ? ["any",
