@@ -27,8 +27,8 @@ export const ROAD_STYLES = {
 // The Granična linija: dash-dot in a colour no road has (roads are white, grey and yellow-brown),
 // drawn over a dark casing.
 export const BORDER_COLORS = {
-  light: { line: "#c0149a", casing: "#ffffff" },
-  dark: { line: "#ff3fd8", casing: "#1a0716" },
+  light: { line: "#00758f", casing: "#ffffff" },
+  dark: { line: "#35d6f2", casing: "#061a20" },
 };
 
 // Kritično područje blizu granice and the highlighted pair of Staze of a chosen area.
