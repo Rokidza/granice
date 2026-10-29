@@ -215,8 +215,12 @@ const PIN_SIZE = ["interpolate", ["linear"], ["zoom"], 7, 0.36, 10, 0.46, 13, 0.
 
 const stanjeIs = (value) => ["==", ["get", "stanje"], value];
 
-// Fog over everything farther from the border than the corridor: roads there take no part.
-const FOG_OPACITY = 0.3;
+// A soft light band along the border, as wide as the corridor: roads beyond it take no part.
+const FOG_OPACITY = 0.35;
+
+// Pixels across a band of `metres` each side of the border, by zoom (about 45 degrees north).
+const corridorWidth = (metres) => ["interpolate", ["exponential", 2], ["zoom"],
+  8, (2 * metres * 2 ** 8) / 110700, 18, (2 * metres * 2 ** 18) / 110700];
 
 /** Paint properties that depend on the colour theme, by layer id. */
 function themedPaint(theme) {
@@ -232,7 +236,6 @@ function themedPaint(theme) {
     "par-veza": { "line-color": ink(theme) },
     "segmenti-nedovoljno": { "line-color": ink(theme) },
     "rijecna-granica": { "line-color": RIVER[theme] },
-    "pojas-magla": { "fill-color": SURFACES[theme] },
     "mjerenje-casing": { "line-color": SURFACES[theme] },
     "mjerenje-linija": { "line-color": ink(theme) },
     "mjerenje-tocke": { "circle-color": ink(theme), "circle-stroke-color": SURFACES[theme] },
@@ -252,6 +255,10 @@ function themedPaint(theme) {
 function dataLayers(theme) {
   const colors = themedPaint(theme);
   const layers = [
+    { id: "pojas-magla", type: "line", source: "granica",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ffffff", "line-opacity": FOG_OPACITY, "line-blur": 12,
+        "line-width": corridorWidth(state.corridorM ?? 0) } },
     // The two Staze of the pair of the chosen Kritično područje, a soft red under the roads.
     { id: "staze-par", type: "line", source: "staze", filter: NO_ID,
       layout: { "line-cap": "round", "line-join": "round" },
@@ -289,8 +296,6 @@ function dataLayers(theme) {
     );
   }
   layers.push(
-    { id: "pojas-magla", type: "fill", source: "magla",
-      paint: { ...colors["pojas-magla"], "fill-opacity": FOG_OPACITY } },
     // Riječna granica: a narrow, pale blue band under the border line.
     { id: "rijecna-granica", type: "line", source: "rijecna_granica",
       layout: { "line-cap": "butt", "line-join": "round" },
@@ -393,7 +398,7 @@ const LAYER_GROUPS = [
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
   { id: "staza", label: "Staze", hint: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
-  { id: "magla", label: "Magla", hint: "Magla izvan pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla"] },
+  { id: "magla", label: "Magla", hint: "Svjetliji pojas uz granicu u kojem putovi ulaze u izračun", layers: ["pojas-magla"] },
 ];
 
 // One-click views: the layer groups that stay on.
@@ -729,10 +734,10 @@ function renderLegend() {
           const { fill, casing } = ROAD_STYLES[theme].cesta;
           sampleLine(svg, casing, 4.8);
           sampleLine(svg, fill, 3);
-          svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: SURFACES[theme], "fill-opacity": FOG_OPACITY }));
+          svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: "#ffffff", "fill-opacity": FOG_OPACITY }));
         }),
-        `Dalje od ${corridorText()} od granice (zamagljeno)`,
-        "Taj dio staze ne ulazi u izračun. Udaljenost se bira u izborniku „Napredno”.",
+        `Do ${corridorText()} od granice (svjetliji pojas)`,
+        "Samo taj dio staza ulazi u izračun. Udaljenost se bira u izborniku „Napredno”.",
       ),
     ),
   );
@@ -756,7 +761,6 @@ const plural = (n, one, few, many) =>
 // one from a dropdown and the page loads its file.
 
 const corridorText = () => metres(state.corridorM);
-const fogData = (choice) => ({ type: "Feature", geometry: choice.magla, properties: {} });
 
 function loadCorridor(distanceM) {
   if (!state.corridorFiles.has(distanceM)) {
@@ -776,7 +780,7 @@ function applyCorridor(choice) {
   });
   state.corridorM = choice.max_border_distance_m;
   state.map.getSource("segmenti").setData({ type: "FeatureCollection", features: state.segments });
-  state.map.getSource("magla").setData(fogData(choice));
+  state.map.setPaintProperty("pojas-magla", "line-width", corridorWidth(state.corridorM));
   setBandLimits();
   recomputeAreas();
 }
@@ -1750,7 +1754,6 @@ async function start() {
     map.addSource("granica", { type: "geojson", data: data.granica });
     map.addSource("segmenti", { type: "geojson", data: data.segmenti });
     map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
-    map.addSource("magla", { type: "geojson", data: firstCorridor ? fogData(firstCorridor) : empty });
     map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
     map.addSource("podrucja", { type: "geojson", data: empty });
     map.addSource("parovi", { type: "geojson", data: empty });
