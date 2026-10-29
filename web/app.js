@@ -4,12 +4,10 @@
 import CONFIG from "./config.js";
 import {
   BORDER_COLORS,
-  CASING,
   DANGER,
   PINS,
   RIVER,
   ROAD_STYLES,
-  SELECTED,
   SURFACES,
 } from "./js/colors.js";
 import {
@@ -67,7 +65,6 @@ const AREA_TITLES = { kopno: "Blizu granice", rijeka: "Preko rijeke" };
 const METRES_PER_DEGREE = 111320;
 const WALKING_M_PER_MINUTE = 4000 / 60; // about 4 km/h off-road, so the minutes are a lower bound
 const NO_ID = ["==", ["get", "id"], -1];
-const NO_SELECTION = ["==", ["get", "id"], ""];
 
 const state = {
   map: null,
@@ -240,8 +237,6 @@ function themedPaint(theme) {
     "mjerenje-tocke": { "circle-color": ink(theme), "circle-stroke-color": SURFACES[theme] },
     "segmenti-sporna": { "line-color": ink(theme) },
     "segmenti-prijelaz": { "line-color": "#898781" },
-    "segmenti-odabir-casing": { "line-color": CASING[theme] },
-    "segmenti-odabir": { "line-color": SELECTED[theme] },
   };
   for (const category of CATEGORIES) {
     const { fill, casing } = ROAD_STYLES[theme][category];
@@ -314,12 +309,6 @@ function dataLayers(theme) {
       paint: { ...colors["granica-casing"], "line-width": 3.6, "line-opacity": 0.6 } },
     { id: "granica", type: "line", source: "granica",
       paint: { ...colors.granica, "line-width": 1.8, "line-dasharray": [5, 2, 1.2, 2] } },
-    // The segments of the chosen Kritično područje or Izravni prelazak, a thin yellow line over the
-    // Granična linija so there is no doubt which.
-    { id: "segmenti-odabir-casing", type: "line", source: "segmenti", filter: NO_SELECTION,
-      layout: { "line-cap": "round" }, paint: { ...colors["segmenti-odabir-casing"], "line-width": zoomScaled(4.5), "line-opacity": 0.7 } },
-    { id: "segmenti-odabir", type: "line", source: "segmenti", filter: NO_SELECTION,
-      layout: { "line-cap": "round" }, paint: { ...colors["segmenti-odabir"], "line-width": zoomScaled(2.6) } },
     { id: "prijelazi-sluzbeni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "sluzbeni_prijelaz"],
       minzoom: 9,
@@ -377,9 +366,9 @@ const LAYER_GROUPS = [
   { id: "preko-rijeke", label: "Preko rijeke", hint: "Kritična područja gdje se mora prijeći rijeku", layers: ["podrucja-rijeka"] },
   { id: "zona", label: "Zona područja", hint: "Putovi najbližih parova, vidljivi tek pri većem zumu",
     layers: ["staze-zona", "zona-veze"] },
-  { id: "odabir", label: "Odabrano područje", hint: "Označeni segmenti, najbliži par staza i pješački prijelaz odabranog područja",
+  { id: "odabir", label: "Odabrano područje", hint: "Najbliži par staza i pješački prijelaz odabranog područja",
     layers: [
-      "segmenti-odabir-casing", "segmenti-odabir", "staze-par", "par-odabir", "parovi-casing", "parovi-linija",
+      "staze-par", "par-odabir", "parovi-casing", "parovi-linija",
       "parovi-tocke", "par-veza",
     ],
     onChange: (visible) => $("map").classList.toggle("hide-pair-labels", !visible) },
@@ -921,24 +910,17 @@ function linksData(links) {
 /** Nothing chosen: no marked segments, no highlighted pair, no links. */
 function clearSelection() {
   const { map } = state;
-  map.setFilter("segmenti-odabir", NO_SELECTION);
-  map.setFilter("segmenti-odabir-casing", NO_SELECTION);
   map.getSource("parovi").setData(emptyCollection());
   for (const button of document.querySelectorAll(".area-button[aria-current]")) button.removeAttribute("aria-current");
   state.selectedPair = null;
   highlightPair();
 }
 
-/** Marks segments of the border as chosen; for a Kritično područje also shows its pairs of Staze
- * and the links between them, and the pair of the closest one stays highlighted with its labels. */
-function select({ segmentIds, area = null }) {
+/** Clears the previous choice; for a Kritično područje also shows its pairs of Staze and the links
+ * between them, and the pair of the closest one stays highlighted with its labels. */
+function select({ area = null }) {
   clearSelection();
-  if (!area) { // an Izravni prelazak marks its segment; an area leaves the border as it is
-    const filter = ["in", ["get", "id"], ["literal", segmentIds]];
-    state.map.setFilter("segmenti-odabir", filter);
-    state.map.setFilter("segmenti-odabir-casing", filter);
-    return;
-  }
+  if (!area) return;
   state.selectedPair = closestPairSegment(area);
   state.map.getSource("parovi").setData(linksData(crossingLinks(area.segments, state.band)));
   highlightPair();
@@ -1201,7 +1183,7 @@ function fitArea(area) {
 /** Chooses a Kritično područje: its segments are marked, the closest pair stays highlighted until
  * another choice. From the list the map flies to it, from a pin it stays where it is. */
 function showArea(area, { fly }) {
-  select({ segmentIds: area.segments.map((s) => s.properties.id), area });
+  select({ area });
   markListEntry(area.id);
   if (fly) {
     fitArea(area);
@@ -1220,7 +1202,7 @@ function showArea(area, { fly }) {
 /** Chooses an Izravni prelazak and flies to it. */
 function showCrossing(feature) {
   const p = feature.properties;
-  select({ segmentIds: [p.segment] });
+  select({});
   markListEntry(`izravni-${p.segment}`);
   const { map } = state;
   map.flyTo({ center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 15), ...GLIDE });
