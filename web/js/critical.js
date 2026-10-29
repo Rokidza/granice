@@ -72,6 +72,8 @@ export function kriticnaPodrucja(segments, band) {
   }
   const areas = { kopno: [], rijeka: [] };
   for (const run of runs) {
+    const closest = run.reduce((best, s) => (s.properties.udaljenost_m < best.properties.udaljenost_m ? s : best));
+    const { hr_tocka: hr, bih_tocka: bih } = closest.properties;
     const middle = run[Math.floor((run.length - 1) / 2)].geometry.coordinates;
     areas[categoryOf(run[0].properties)].push({
       lanac: run[0].properties.lanac,
@@ -81,7 +83,9 @@ export function kriticnaPodrucja(segments, band) {
       lengthM: run.reduce((sum, s) => sum + s.properties.duljina_m, 0),
       minDistanceM: Math.min(...run.map((s) => s.properties.udaljenost_m)),
       maxDistanceM: Math.max(...run.map((s) => s.properties.udaljenost_m)),
-      marker: middle[Math.floor(middle.length / 2)], // on the border, in the middle of the area
+      // Where the closest pair crosses the border, which is where a click on the pin flies to; the
+      // middle of the area when that pair has no points.
+      marker: hr && bih ? [(hr[0] + bih[0]) / 2, (hr[1] + bih[1]) / 2] : middle[Math.floor(middle.length / 2)],
       segments: run,
     });
   }
