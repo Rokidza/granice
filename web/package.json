@@ -8,8 +8,12 @@
     "check-colors": "node tools/check-colors.mjs"
   },
   "dependencies": {
+    "@protomaps/basemaps": "^5.0.0",
     "maplibre-gl": "^5.0.0",
-    "pmtiles": "^4.0.0",
-    "@protomaps/basemaps": "^5.0.0"
+    "pmtiles": "^4.0.0"
+  },
+  "devDependencies": {
+    "geojson-vt": "^4.0.3",
+    "vt-pbf": "^3.1.3"
   }
 }

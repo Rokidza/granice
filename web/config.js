@@ -2,6 +2,9 @@
 export default {
   // Output of `python -m granice refresh`.
   dataDir: "../data/out/",
+  // Vector tiles of the Staze (the layer is 18 MB as GeoJSON). Made by `npm run build` into web/dist/;
+  // null here, where the page then reads data/out/staze.geojson whole.
+  stazeTiles: null,
   // Optional offline basemap: a Protomaps PMTiles extract of the HR-BiH corridor. If the file exists
   // it is offered as "Karta (lokalno)" and chosen by default; nothing then leaves this machine.
   // See README.md for how to create it.

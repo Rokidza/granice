@@ -7,6 +7,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildTiles, MAX_ZOOM } from "./build-tiles.mjs";
 
 const web = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(web, "dist");
@@ -45,10 +46,15 @@ cpSync(join(dataOut, "pojasevi"), join(out, "data", "pojasevi"), { recursive: tr
 const staze = JSON.parse(readFileSync(join(dataOut, "staze.geojson"), "utf8"));
 const index = Object.fromEntries(staze.features.map(({ properties: p }) => [`${p.strana}:${p.id}`, p]));
 writeFileSync(join(out, "data", "staze-index.json"), JSON.stringify(index));
+const tiles = buildTiles(staze, join(out, "data", "staze"));
 
 // In the repo the page sits next to ../data/; in dist/ the data sits inside it.
 const config = readFileSync(join(web, "config.js"), "utf8");
-const deployed = config.replaceAll("../data/out/", "data/").replaceAll("../data/", "data/");
+const deployed = config
+  .replaceAll("../data/out/", "data/")
+  .replaceAll("../data/", "data/")
+  .replace("stazeTiles: null", `stazeTiles: "data/staze/{z}/{x}/{y}.pbf", stazeMaxZoom: ${MAX_ZOOM}`);
+if (!deployed.includes("stazeTiles: \"")) throw new Error("config.js has no stazeTiles to fill in");
 if (deployed.includes("../")) throw new Error("config.js still points outside dist/");
 writeFileSync(join(out, "config.js"), deployed);
 
@@ -67,4 +73,4 @@ writeFileSync(
   ].join("\n"),
 );
 
-console.log(`web/dist ready (${DATA_FILES.length} data files).`);
+console.log(`web/dist ready (${DATA_FILES.length} data files, ${tiles} Staze tiles).`);

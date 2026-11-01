@@ -256,15 +256,16 @@ function themedPaint(theme) {
 }
 
 function dataLayers(theme) {
+  const staze = { source: "staze", ...(CONFIG.stazeTiles ? { "source-layer": "staze" } : {}) };
   const colors = themedPaint(theme);
   const layers = [
     // The two Staze of the pair of the chosen Kritično područje, a soft red under the roads.
-    { id: "staze-par", type: "line", source: "staze", filter: NO_ID,
+    { id: "staze-par", type: "line", ...staze, filter: NO_ID,
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { ...colors["staze-par"], "line-width": roadScaled(8), "line-opacity": 0.4 } },
     // The Staze of every pair within the limit, a faint red under the roads that fades in when
     // zoomed close, so the way a person would walk shows without anything being chosen.
-    { id: "staze-zona", type: "line", source: "staze", filter: NO_ID,
+    { id: "staze-zona", type: "line", ...staze, filter: NO_ID,
       minzoom: 11.5, layout: { "line-cap": "round", "line-join": "round" },
       paint: { ...colors["staze-zona"], "line-width": roadScaled(4.5),
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0, 13.5, 0.45] } },
@@ -274,7 +275,7 @@ function dataLayers(theme) {
     const filter = ["==", ["get", "kategorija"], category];
     layers.push(
       {
-        id: `staze-${category}-casing`, type: "line", source: "staze", filter,
+        id: `staze-${category}-casing`, type: "line", ...staze, filter,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           ...colors[`staze-${category}-casing`],
@@ -283,7 +284,7 @@ function dataLayers(theme) {
         },
       },
       {
-        id: `staze-${category}`, type: "line", source: "staze", filter,
+        id: `staze-${category}`, type: "line", ...staze, filter,
         layout: { "line-cap": style.dash ? "butt" : "round", "line-join": "round" },
         paint: {
           ...colors[`staze-${category}`],
@@ -1832,7 +1833,9 @@ async function start() {
   map.addImage("ikona-izravni", imageData(izravniPrelazakCanvas()), { pixelRatio: 2 });
   const empty = { type: "FeatureCollection", features: [] };
   // The Staze are the big layer: the map's worker fetches and tiles it from the URL, off the page's thread.
-  map.addSource("staze", { type: "geojson", data: new URL(CONFIG.dataDir + "staze.geojson", document.baseURI).href });
+  map.addSource("staze", CONFIG.stazeTiles
+    ? { type: "vector", tiles: [new URL(".", document.baseURI).href + CONFIG.stazeTiles] /* absolute, as the worker has no base; no URL(), which would encode {z} */, minzoom: 0, maxzoom: CONFIG.stazeMaxZoom ?? 12 }
+    : { type: "geojson", data: new URL(CONFIG.dataDir + "staze.geojson", document.baseURI).href });
   map.addSource("granica", { type: "geojson", data: data.granica });
   map.addSource("segmenti", { type: "geojson", data: data.segmenti });
   map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
