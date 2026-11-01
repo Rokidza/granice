@@ -1305,7 +1305,13 @@ function showCrossing(feature) {
   select({});
   markListEntry(`izravni-${p.segment}`);
   const { map } = state;
-  map.flyTo({ center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 15), ...GLIDE });
+  // The place goes to the middle of the free map, leaving room on its right for the card.
+  const wide = !window.matchMedia("(max-width: 760px)").matches;
+  map.flyTo({
+    center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 15),
+    offset: [wide ? (initialPadding().left - 380) / 2 : 0, 0], // a one-off shift: the map keeps no padding
+    ...GLIDE,
+  });
   state.openPopup?.(feature.geometry.coordinates, crossingPopup(feature));
 }
 
@@ -1688,7 +1694,10 @@ function setupClicks() {
   const open = (lngLat, content) => {
     popup?.remove();
     coordsPopup?.remove();
-    popup = new globalThis.maplibregl.Popup({ maxWidth: "340px", offset: 14 }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    // Wide screens: the card sits beside the place, so the place and the roads around it stay visible.
+    const beside = !window.matchMedia("(max-width: 760px)").matches;
+    popup = new globalThis.maplibregl.Popup({ maxWidth: "340px", offset: beside ? [20, 0] : 14, ...(beside ? { anchor: "left" } : {}) })
+      .setLngLat(lngLat).setDOMContent(content).addTo(map);
     popup.on("close", () => { state.popupOpen = false; });
     state.popupOpen = true; // the hover tooltips wait while it is open
   };
