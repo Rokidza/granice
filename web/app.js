@@ -232,7 +232,7 @@ const stanjeIs = (value) => ["==", ["get", "stanje"], value];
 function themedPaint(theme) {
   const border = BORDER_COLORS[theme];
   const paint = {
-    background: { "background-color": SURFACES[theme] },
+    background: { "background-color": state.basemap?.background ?? SURFACES[theme] },
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
     "staze-par": { "line-color": DANGER[theme] },
@@ -465,6 +465,12 @@ async function labelParts(def) {
 function rasterParts(def) {
   const sources = {};
   const layers = [];
+  // A coarse copy of the imagery under the sharp one, kept in the tile cache for the whole border:
+  // when the map glides to a far place, the tiles not yet loaded show this instead of the background.
+  if (def.lowZoom !== undefined) {
+    sources[`bm-${def.id}-low`] = { type: "raster", tiles: def.tiles, tileSize: def.tileSize, maxzoom: def.lowZoom };
+    layers.push({ id: `bm-${def.id}-low`, type: "raster", source: `bm-${def.id}-low`, paint: { "raster-fade-duration": 0 } });
+  }
   [def, ...(def.overlays ?? [])].forEach((part, index) => {
     const id = index ? `bm-${def.id}-${index}` : `bm-${def.id}`;
     sources[id] = {
@@ -1779,6 +1785,7 @@ async function start() {
   const map = new globalThis.maplibregl.Map({
     container: "map",
     attributionControl: false,
+    maxTileCacheSize: 100, // keeps the coarse imagery of the whole border; the default is about the view
     refreshExpiredTiles: false, // imagery does not change while the page is open
     bounds,
     fitBoundsOptions: { padding: initialPadding() },
