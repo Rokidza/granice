@@ -84,6 +84,7 @@ const state = {
   pairSegment: null, // id of the segment whose pair is highlighted (that of the chosen area)
   selectedPair: null, // the segment of the chosen Kritično područje whose pair stays highlighted
   pairLabels: [], // markers naming the two roads and the gap of the highlighted pair
+  plain: false, // only the basemap is shown, none of our layers
   hasLocalBasemap: false,
   hasGlyphs: false,
   basemaps: [],
@@ -625,10 +626,28 @@ const hiddenGroups = new Set();
 function setGroupVisible(group, visible) {
   if (visible) hiddenGroups.delete(group.id);
   else hiddenGroups.add(group.id);
-  for (const id of group.layers) {
-    state.map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
-  }
+  applyVisibility();
   group.onChange?.(visible);
+}
+
+/** Shows the layers of every group that is on, and none while the plain imagery is chosen
+ * ("Čista snimka": the basemap alone, with its place names). */
+function applyVisibility() {
+  const { map } = state;
+  for (const group of LAYER_GROUPS) {
+    const visible = !state.plain && !hiddenGroups.has(group.id);
+    for (const id of group.layers) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+  }
+}
+
+function setupPlainToggle() {
+  const button = $("plain-toggle");
+  button.addEventListener("click", () => {
+    state.plain = !state.plain;
+    button.setAttribute("aria-pressed", String(state.plain));
+    $("map").classList.toggle("plain", state.plain);
+    applyVisibility();
+  });
 }
 
 function syncLayerControls() {
@@ -1859,6 +1878,7 @@ async function start() {
   setupHover();
   setupLinkAnimation();
   setupMeasure();
+  setupPlainToggle();
   setupCorridorChoice(firstCorridor !== null);
   setupSkipRiver();
   setupTabs();
