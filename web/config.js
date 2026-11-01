@@ -21,11 +21,17 @@ export default {
   // that is always light or dark (relief, satellite), "system" to follow the OS theme.
   basemaps: [
     {
-      id: "karta", label: "Karta", short: "Karta", kind: "style", palette: "system",
-      style: {
-        light: "https://tiles.openfreemap.org/styles/positron",
-        dark: "https://tiles.openfreemap.org/styles/dark",
-      },
+      id: "satelit", label: "Karta (satelitska snimka)", short: "Karta", kind: "raster", palette: "dark",
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      tileSize: 256, maxzoom: 18,
+      attribution: "Esri, Maxar, Earthstar Geographics i GIS User Community",
+      // Shown where imagery has not loaded yet (while the map glides to a place): a coarse copy of the
+      // imagery up to this zoom, kept loaded, and over it a background of the imagery's average colour.
+      lowZoom: 7, background: "#27301f",
+      // Place names and the boundaries of other countries and entities over the imagery, drawn from
+      // the vector tiles of this style. Unlike the Esri overlay (which has its own HR-BiH line next to
+      // ours, baked into its image) it can leave that one border out.
+      labels: { style: "https://tiles.openfreemap.org/styles/dark", omitBorderBetween: ["HR", "BA"] },
     },
     {
       id: "reljef", label: "Reljef (topografska, izohipse)", short: "Reljef", kind: "raster", palette: "light",
@@ -37,19 +43,6 @@ export default {
       tileSize: 256, maxzoom: 17,
       attribution:
         'Kartografija © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA), © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, SRTM',
-    },
-    {
-      id: "satelit", label: "Satelitska snimka", short: "Satelit", kind: "raster", palette: "dark",
-      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-      tileSize: 256, maxzoom: 18,
-      attribution: "Esri, Maxar, Earthstar Geographics i GIS User Community",
-      // Shown where imagery has not loaded yet (while the map glides to a place): a coarse copy of the
-      // imagery up to this zoom, kept loaded, and over it a background of the imagery's average colour.
-      lowZoom: 7, background: "#27301f",
-      // Place names and the boundaries of other countries and entities over the imagery, drawn from
-      // the vector tiles of this style. Unlike the Esri overlay (which has its own HR-BiH line next to
-      // ours, baked into its image) it can leave that one border out.
-      labels: { style: "https://tiles.openfreemap.org/styles/dark", omitBorderBetween: ["HR", "BA"] },
     },
   ],
   defaultBasemap: "satelit",
