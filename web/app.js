@@ -111,10 +111,26 @@ async function exists(url) {
   }
 }
 
-async function loadAll() {
-  const names = ["meta", "staze", "granica", "segmenti", "prijelazi", "rijecna_granica"];
-  const files = await Promise.all(names.map((n) => loadJson(n + (n === "meta" ? ".json" : ".geojson"))));
-  return Object.fromEntries(names.map((n, i) => [n, files[i]]));
+const DATA_NAMES = ["meta", "granica", "segmenti", "prijelazi", "rijecna_granica"];
+
+/** Starts every request at once. The page awaits the small ones before it shows the map and the
+ * rest after, so the basemap never waits for the layers. */
+function requestData() {
+  const requests = Object.fromEntries(DATA_NAMES.map((n) => [n, loadJson(n + (n === "meta" ? ".json" : ".geojson"))]));
+  for (const request of Object.values(requests)) request.catch(() => {}); // reported where it is awaited
+  return requests;
+}
+
+/** Properties of the Staze by "<strana>:<id>", for the names of the pairs. The map itself reads
+ * staze.geojson from its URL in a worker, so the page parses only this slim file (made by
+ * tools/build-dist.mjs), or the whole layer where there is none. */
+async function loadStazaIndex() {
+  try {
+    return new Map(Object.entries(await loadJson("staze-index.json")));
+  } catch {
+    const { features } = await loadJson("staze.geojson");
+    return new Map(features.map(({ properties: p }) => [`${p.strana}:${p.id}`, p]));
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -212,13 +228,6 @@ const PIN_SIZE = ["interpolate", ["linear"], ["zoom"], 7, 0.36, 10, 0.46, 13, 0.
 
 const stanjeIs = (value) => ["==", ["get", "stanje"], value];
 
-// A soft light band along the border, as wide as the corridor: roads beyond it take no part.
-const FOG_OPACITY = 0.35;
-
-// Pixels across a band of `metres` each side of the border, by zoom (about 45 degrees north).
-const corridorWidth = (metres) => ["interpolate", ["exponential", 2], ["zoom"],
-  8, (2 * metres * 2 ** 8) / 110700, 18, (2 * metres * 2 ** 18) / 110700];
-
 /** Paint properties that depend on the colour theme, by layer id. */
 function themedPaint(theme) {
   const border = BORDER_COLORS[theme];
@@ -249,10 +258,6 @@ function themedPaint(theme) {
 function dataLayers(theme) {
   const colors = themedPaint(theme);
   const layers = [
-    { id: "pojas-magla", type: "line", source: "granica",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#ffffff", "line-opacity": FOG_OPACITY, "line-blur": 12,
-        "line-width": corridorWidth(state.corridorM ?? 0) } },
     // The two Staze of the pair of the chosen Kritično područje, a soft red under the roads.
     { id: "staze-par", type: "line", source: "staze", filter: NO_ID,
       layout: { "line-cap": "round", "line-join": "round" },
@@ -389,7 +394,6 @@ const LAYER_GROUPS = [
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
   { id: "staza", label: "Staze", hint: "Staze i puteljci", layers: ["staze-staza-casing", "staze-staza"] },
-  { id: "magla", label: "Magla", hint: "Svjetliji pojas uz granicu u kojem putovi ulaze u izračun", layers: ["pojas-magla"] },
 ];
 
 // One-click views: the layer groups that stay on.
@@ -431,42 +435,57 @@ async function fetchStyle(url) {
   }
 }
 
+/** Place names and boundaries from a vector style, to go over the imagery of `def`. */
+async function labelParts(def) {
+  const style = await fetchStyle(def.labels.style);
+  const sources = {};
+  const layers = [];
+  for (const [name, source] of Object.entries(style.sources)) sources[`bm-lab-${name}`] = source;
+  const [a, b] = def.labels.omitBorderBetween;
+  const notThatBorder = ["all", ["!=", ["get", "maritime"], 1], ["!", ["all", ["in", ["get", "adm0_l"], ["literal", [a, b]]], ["in", ["get", "adm0_r"], ["literal", [a, b]]]]]];
+  for (const layer of style.layers) {
+    if (!["place", "water_name", "boundary"].includes(layer["source-layer"])) continue;
+    const copy = { ...layer, id: `bm-lab-${layer.id}`, source: `bm-lab-${layer.source}` };
+    if (layer.type === "symbol") {
+      // The style's grey names are made for its dark map: light text with a dark halo on imagery.
+      copy.paint = { ...layer.paint, "text-color": "#ffffff", "text-halo-color": "rgba(0,0,0,0.85)", "text-halo-width": 1.6, "text-halo-blur": 0.5 };
+    }
+    if (layer["source-layer"] === "boundary") {
+      copy.filter = layer.filter ? ["all", layer.filter, notThatBorder] : notThatBorder;
+      // The style's grey lines are made for a map, not for imagery: thin and light instead.
+      copy.paint = { ...layer.paint, "line-color": "#ffffff", "line-opacity": 0.6, "line-width": 1.2, "line-blur": 0 };
+    }
+    layers.push(copy);
+  }
+  return { sources, layers, glyphs: style.glyphs };
+}
+
+/** The imagery of a raster basemap, then transparent label layers (`overlays`) drawn over it. */
+function rasterParts(def) {
+  const sources = {};
+  const layers = [];
+  [def, ...(def.overlays ?? [])].forEach((part, index) => {
+    const id = index ? `bm-${def.id}-${index}` : `bm-${def.id}`;
+    sources[id] = {
+      type: "raster", tiles: part.tiles, tileSize: part.tileSize ?? def.tileSize, maxzoom: part.maxzoom ?? def.maxzoom,
+      attribution: part.attribution,
+    };
+    layers.push({ id, type: "raster", source: id });
+  });
+  return { sources, layers };
+}
+
 /** The sources, layers and glyphs/sprite of a basemap, ready to add to the map. */
 async function basemapParts(def, theme) {
   if (def.kind === "none") return { sources: {}, layers: [] };
   if (def.kind === "raster") {
-    // The imagery itself, then transparent label layers (`overlays`) drawn over it.
-    const sources = {};
-    const layers = [];
-    [def, ...(def.overlays ?? [])].forEach((part, index) => {
-      const id = index ? `bm-${def.id}-${index}` : `bm-${def.id}`;
-      sources[id] = {
-        type: "raster", tiles: part.tiles, tileSize: part.tileSize ?? def.tileSize, maxzoom: part.maxzoom ?? def.maxzoom,
-        attribution: part.attribution,
-      };
-      layers.push({ id, type: "raster", source: id });
-    });
+    const { sources, layers } = rasterParts(def);
     if (!def.labels) return { sources, layers };
-    // Place names and boundaries from a vector style, over the imagery.
-    const style = await fetchStyle(def.labels.style);
-    for (const [name, source] of Object.entries(style.sources)) sources[`bm-lab-${name}`] = source;
-    const [a, b] = def.labels.omitBorderBetween;
-    const notThatBorder = ["all", ["!=", ["get", "maritime"], 1], ["!", ["all", ["in", ["get", "adm0_l"], ["literal", [a, b]]], ["in", ["get", "adm0_r"], ["literal", [a, b]]]]]];
-    for (const layer of style.layers) {
-      if (!["place", "water_name", "boundary"].includes(layer["source-layer"])) continue;
-      const copy = { ...layer, id: `bm-lab-${layer.id}`, source: `bm-lab-${layer.source}` };
-      if (layer.type === "symbol") {
-        // The style's grey names are made for its dark map: light text with a dark halo on imagery.
-        copy.paint = { ...layer.paint, "text-color": "#ffffff", "text-halo-color": "rgba(0,0,0,0.85)", "text-halo-width": 1.6, "text-halo-blur": 0.5 };
-      }
-      if (layer["source-layer"] === "boundary") {
-        copy.filter = layer.filter ? ["all", layer.filter, notThatBorder] : notThatBorder;
-        // The style's grey lines are made for a map, not for imagery: thin and light instead.
-        copy.paint = { ...layer.paint, "line-color": "#ffffff", "line-opacity": 0.6, "line-width": 1.2, "line-blur": 0 };
-      }
-      layers.push(copy);
-    }
-    return { sources, layers, glyphs: style.glyphs };
+    // Place names and boundaries from a vector style, over the imagery. They follow once the style
+    // is in, so the imagery does not wait for them.
+    const later = labelParts(def);
+    later.catch(() => {}); // reported by showBasemap if it is still the choice
+    return { sources, layers, later };
   }
   if (def.kind === "pmtiles") {
     const flavor = globalThis.basemaps.namedFlavor(theme);
@@ -505,8 +524,7 @@ function setBasemapStatus(message) {
 }
 
 /** Makes `def` the visible basemap (or re-adds it, e.g. for the other colour theme). */
-async function showBasemap(def) {
-  const { map } = state;
+async function showBasemap(def, { inStyle = false } = {}) {
   const request = ++state.basemapRequest;
   state.basemap = def;
   setBasemapStatus("");
@@ -526,7 +544,24 @@ async function showBasemap(def) {
   }
   if (request !== state.basemapRequest) return;
 
-  removeBasemap();
+  if (!inStyle) { // else the imagery went into the map's first style
+    removeBasemap();
+    addBasemapParts(parts);
+  }
+  if (!parts.later) return;
+  let more;
+  try {
+    more = await parts.later;
+  } catch {
+    if (request === state.basemapRequest) setBasemapStatus("Nazivi mjesta nisu učitani (nema internetske veze?).");
+    return;
+  }
+  if (request === state.basemapRequest) addBasemapParts(more);
+}
+
+/** Adds sources and layers of a basemap below the data layers. */
+function addBasemapParts(parts) {
+  const { map } = state;
   if (parts.glyphs) map.setGlyphs(parts.glyphs);
   if (parts.sprite) map.setSprite(parts.sprite);
   for (const [id, source] of Object.entries(parts.sources)) {
@@ -740,16 +775,6 @@ function renderLegend() {
       legendRow(roadSample("cesta", theme), "Cesta"),
       legendRow(roadSample("makadam", theme), "Makadam / šumski put"),
       legendRow(roadSample("staza", theme), "Staza / puteljak"),
-      legendRow(
-        sample((svg) => {
-          const { fill, casing } = ROAD_STYLES[theme].cesta;
-          sampleLine(svg, casing, 4.8);
-          sampleLine(svg, fill, 3);
-          svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: "#ffffff", "fill-opacity": FOG_OPACITY }));
-        }),
-        `Do ${corridorText()} od granice (svjetliji pojas)`,
-        "Samo taj dio staza ulazi u izračun. Udaljenost se bira u izborniku „Napredno”.",
-      ),
     ),
   );
   const note = element("p", `U izračun ulaze ceste, makadami i staze, i to samo njihovi dijelovi do ${corridorText()} od granice. Udaljenost para staza je najmanje zbroj njihovih udaljenosti od granice, pa prag iznad ${metres(2 * state.corridorM)} hvata samo parove razmaknute uzduž granice. Odabirom područja u izborniku vidi se par staza koji ga čini kritičnim i put pješice između njih.`, "legend-title");
@@ -782,7 +807,7 @@ function loadCorridor(distanceM) {
   return state.corridorFiles.get(distanceM);
 }
 
-/** Puts the results for one corridor on the map: segment properties, fog, legend, Kritična područja. */
+/** Puts the results for one corridor on the map: segment properties, legend, Kritična područja. */
 function applyCorridor(choice) {
   const rows = new Map(choice.segmenti.map((row) => [row.id, row]));
   state.segments = state.segments.map((feature) => {
@@ -791,7 +816,6 @@ function applyCorridor(choice) {
   });
   state.corridorM = choice.max_border_distance_m;
   state.map.getSource("segmenti").setData({ type: "FeatureCollection", features: state.segments });
-  state.map.setPaintProperty("pojas-magla", "line-width", corridorWidth(state.corridorM));
   setBandLimits();
   recomputeAreas();
 }
@@ -1719,22 +1743,77 @@ function initialPadding() {
 }
 
 async function start() {
-  let data;
+  // Everything is requested at once. The map and the basemap need only the small files, so they
+  // appear while the layers are still arriving.
+  const requests = requestData();
+  $("izravni-summary").textContent = "Učitavam podatke…";
+  const localBasemap = exists(absolute(CONFIG.basemap));
+  let meta;
+  let granica;
   try {
-    data = await loadAll();
+    [meta, granica] = await Promise.all([requests.meta, requests.granica]);
   } catch (error) {
     showError(`Podaci nisu učitani (${error.message}). Pokrenite izračun: python -m granice refresh, a stranicu otvorite preko python -m granice serve.`);
     return;
   }
-  state.meta = data.meta;
+  state.meta = meta;
+  state.hasLocalBasemap = await localBasemap;
+  state.hasGlyphs = state.hasLocalBasemap && await exists(absolute(CONFIG.glyphs).replace("{fontstack}", "Noto Sans Regular").replace("{range}", "0-255"));
+  state.basemaps = [...CONFIG.basemaps];
+  if (state.hasLocalBasemap) {
+    globalThis.maplibregl.addProtocol("pmtiles", new globalThis.pmtiles.Protocol().tile);
+    state.basemaps.unshift({ id: "karta-lokalno", label: "Karta (lokalno, bez interneta)", short: "Lokalno", kind: "pmtiles", palette: "system" });
+  }
+  state.basemap = initialBasemap();
+  if (state.basemap.labels) fetchStyle(state.basemap.labels.style).catch(() => {}); // warm, while the map is set up
+
+  const theme = mapTheme();
+  const bounds = boundsOf(granica.features);
+  // Imagery goes into the first style, so its tiles are requested as the map is made, not once it has loaded.
+  const imagery = state.basemap.kind === "raster" ? rasterParts(state.basemap) : null;
+  if (imagery) {
+    state.basemapSources = Object.keys(imagery.sources);
+    state.basemapIds = imagery.layers.map((layer) => layer.id);
+  }
+  const map = new globalThis.maplibregl.Map({
+    container: "map",
+    attributionControl: false,
+    refreshExpiredTiles: false, // imagery does not change while the page is open
+    bounds,
+    fitBoundsOptions: { padding: initialPadding() },
+    style: {
+      version: 8,
+      sources: imagery?.sources ?? {},
+      layers: [{ id: "background", type: "background", paint: themedPaint(theme).background }, ...(imagery?.layers ?? [])],
+    },
+  });
+  state.map = map;
+  if (new URLSearchParams(location.search).has("debug")) globalThis.__map = map; // for manual checks
+  map.addControl(new globalThis.maplibregl.NavigationControl({ showCompass: false }), "top-right");
+  map.addControl(new globalThis.maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+  map.addControl(new globalThis.maplibregl.AttributionControl({ customAttribution: "Staze i granica: © OpenStreetMap contributors" }), "bottom-left");
+
+  // The basemap goes first: it needs none of the layers.
+  const mapLoaded = new Promise((resolve) => map.once("load", resolve));
+  mapLoaded.then(() => {
+    setupBasemapChoice();
+    showBasemap(state.basemap, { inStyle: imagery !== null });
+  });
+
+  let data;
+  try {
+    data = { meta, granica, ...Object.fromEntries(await Promise.all(["segmenti", "prijelazi", "rijecna_granica"].map(async (n) => [n, await requests[n]]))) };
+  } catch (error) {
+    showError(`Podaci nisu učitani (${error.message}). Pokrenite izračun: python -m granice refresh, a stranicu otvorite preko python -m granice serve.`);
+    return;
+  }
   state.segments = data.segmenti.features;
-  state.stazaById = new Map(data.staze.features.map(({ properties: p }) => [`${p.strana}:${p.id}`, p]));
-  state.corridorM = data.meta.parametri.max_border_distance_m; // segmenti.geojson is computed for it
+  state.corridorM = meta.parametri.max_border_distance_m; // segmenti.geojson is computed for it
   state.skipRiver = readSkipRiver();
   let firstCorridor = null;
   try {
     firstCorridor = await loadCorridor(state.corridorM);
-  } catch { /* data from before the corridor choices: no fog, the field is disabled */ }
+  } catch { /* data from before the corridor choices: the field is disabled */ }
 
   setBandLimits();
   $("band-max").value = String(state.band.maxM);
@@ -1744,70 +1823,48 @@ async function start() {
     link.download = file;
     $("data-links").append(link, " ");
   }
-  $("osm-date").textContent = `OSM podaci od: ${new Date(data.meta.osm_podaci_od).toLocaleString("hr-HR", { dateStyle: "long", timeStyle: "short" })}`;
+  $("osm-date").textContent = `OSM podaci od: ${new Date(meta.osm_podaci_od).toLocaleString("hr-HR", { dateStyle: "long", timeStyle: "short" })}`;
 
-  state.hasLocalBasemap = await exists(absolute(CONFIG.basemap));
-  state.hasGlyphs = state.hasLocalBasemap && await exists(absolute(CONFIG.glyphs).replace("{fontstack}", "Noto Sans Regular").replace("{range}", "0-255"));
-  state.basemaps = [...CONFIG.basemaps];
-  if (state.hasLocalBasemap) {
-    globalThis.maplibregl.addProtocol("pmtiles", new globalThis.pmtiles.Protocol().tile);
-    state.basemaps.unshift({ id: "karta-lokalno", label: "Karta (lokalno, bez interneta)", short: "Lokalno", kind: "pmtiles", palette: "system" });
-  }
-  state.basemap = initialBasemap();
+  await mapLoaded;
+  map.addImage("pin-kopno", imageData(pinCanvas(PINS.kopno)), { pixelRatio: 2 });
+  map.addImage("pin-rijeka", imageData(pinCanvas(PINS.rijeka)), { pixelRatio: 2 });
+  map.addImage("ikona-prijelaz", imageData(sluzbeniPrijelazCanvas()), { pixelRatio: 2 });
+  map.addImage("ikona-izravni", imageData(izravniPrelazakCanvas()), { pixelRatio: 2 });
+  const empty = { type: "FeatureCollection", features: [] };
+  // The Staze are the big layer: the map's worker fetches and tiles it from the URL, off the page's thread.
+  map.addSource("staze", { type: "geojson", data: new URL(CONFIG.dataDir + "staze.geojson", document.baseURI).href });
+  map.addSource("granica", { type: "geojson", data: data.granica });
+  map.addSource("segmenti", { type: "geojson", data: data.segmenti });
+  map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
+  map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
+  map.addSource("podrucja", { type: "geojson", data: empty });
+  map.addSource("parovi", { type: "geojson", data: empty });
+  map.addSource("zona-veze", { type: "geojson", data: empty });
+  map.addSource("par-hover", { type: "geojson", data: empty });
+  map.addSource("mjerenje", { type: "geojson", data: empty });
+  for (const layer of dataLayers(theme)) map.addLayer(layer);
 
-  const theme = mapTheme();
-  const bounds = boundsOf(data.granica.features);
-  const map = new globalThis.maplibregl.Map({
-    container: "map",
-    attributionControl: false,
-    bounds,
-    fitBoundsOptions: { padding: initialPadding() },
-    style: {
-      version: 8,
-      sources: {},
-      layers: [{ id: "background", type: "background", paint: themedPaint(theme).background }],
-    },
-  });
-  state.map = map;
-  if (new URLSearchParams(location.search).has("debug")) globalThis.__map = map; // for manual checks
-  map.addControl(new globalThis.maplibregl.NavigationControl({ showCompass: false }), "top-right");
-  map.addControl(new globalThis.maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-  map.addControl(new globalThis.maplibregl.AttributionControl({ customAttribution: "Staze i granica: © OpenStreetMap contributors" }), "bottom-left");
+  renderToggles();
+  setupClicks();
+  setupHover();
+  setupLinkAnimation();
+  setupMeasure();
+  setupCorridorChoice(firstCorridor !== null);
+  setupSkipRiver();
+  setupTabs();
+  setupPanelToggle();
+  state.crossings = crossingsFrom(data.prijelazi);
+  renderCrossingList();
+  recomputeAreas();
+  applyTheme(); // the basemap was chosen before the layers existed
 
-  map.on("load", () => {
-    map.addImage("pin-kopno", imageData(pinCanvas(PINS.kopno)), { pixelRatio: 2 });
-    map.addImage("pin-rijeka", imageData(pinCanvas(PINS.rijeka)), { pixelRatio: 2 });
-    map.addImage("ikona-prijelaz", imageData(sluzbeniPrijelazCanvas()), { pixelRatio: 2 });
-    map.addImage("ikona-izravni", imageData(izravniPrelazakCanvas()), { pixelRatio: 2 });
-    const empty = { type: "FeatureCollection", features: [] };
-    map.addSource("staze", { type: "geojson", data: data.staze });
-    map.addSource("granica", { type: "geojson", data: data.granica });
-    map.addSource("segmenti", { type: "geojson", data: data.segmenti });
-    map.addSource("rijecna_granica", { type: "geojson", data: data.rijecna_granica });
-    map.addSource("prijelazi", { type: "geojson", data: data.prijelazi });
-    map.addSource("podrucja", { type: "geojson", data: empty });
-    map.addSource("parovi", { type: "geojson", data: empty });
-    map.addSource("zona-veze", { type: "geojson", data: empty });
-    map.addSource("par-hover", { type: "geojson", data: empty });
-    map.addSource("mjerenje", { type: "geojson", data: empty });
-    for (const layer of dataLayers(theme)) map.addLayer(layer);
-
-    renderToggles();
-    setupBasemapChoice();
-    showBasemap(state.basemap);
-    setupClicks();
-    setupHover();
-    setupLinkAnimation();
-    setupMeasure();
-    setupCorridorChoice(firstCorridor !== null);
-    setupSkipRiver();
-    setupTabs();
-    setupPanelToggle();
-    setupOverview(data.granica, bounds);
-    state.crossings = crossingsFrom(data.prijelazi);
-    renderCrossingList();
-    recomputeAreas();
-  });
+  // The names of the pairs come in last; the lists are drawn again with them.
+  loadStazaIndex().then((index) => {
+    state.stazaById = index;
+    renderAreaLists();
+  }, () => { /* the lists keep the names the per-corridor files carry */ });
+  // The overview shows only from zoom 9 and loads imagery of its own: after the main map is done.
+  map.once("idle", () => setupOverview(data.granica, bounds));
 
   $("band-max").addEventListener("input", () => {
     if (map.getLayer("podrucja-kopno")) recomputeAreas(); // once the layers are added

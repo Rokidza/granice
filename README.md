@@ -55,7 +55,7 @@ python -m granice compute          # ili refresh, ako treba svježi OSM
 git add data/out && git commit -m "Osvježi izračunate slojeve" && git push
 ```
 
-Netlify zatim pokrene `npm ci && npm run vendor && npm run build` u `web/` i objavi `web/dist/`: stranicu, `vendor/`, šest slojeva u `data/` i `_headers` (`noindex`, bez cachea za podatke). Isto se može provjeriti lokalno: `cd web && npm install && npm run vendor && npm run build`.
+Netlify zatim pokrene `npm ci && npm run vendor && npm run build` u `web/` i objavi `web/dist/`: stranicu, `vendor/`, šest slojeva u `data/` i `_headers` (`noindex`, podaci se uvijek provjeravaju, ali se ne preuzimaju ponovno ako se nisu promijenili). Isto se može provjeriti lokalno: `cd web && npm install && npm run vendor && npm run build`.
 
 Što to znači (ADR 0003): svatko s URL-om vidi kartu rizika. Izračunati slojevi su OSM izvedena baza, pa se objavljuju pod ODbL-om; stranica uz atribuciju nudi njihovo preuzimanje. Podloge (ADR 0002) dolaze s vanjskih servisa, a uvjete Esri i OpenTopoMap za javnu stranicu treba provjeriti; ako ne odgovaraju, uklonite unose `satelit` i `reljef` iz `web/config.js` prije `npm run build`.
 

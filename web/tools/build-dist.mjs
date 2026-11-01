@@ -40,6 +40,12 @@ for (const file of VENDOR_FILES) cpSync(join(web, "vendor", file), join(out, "ve
 for (const file of DATA_FILES) cpSync(join(dataOut, file), join(out, "data", file));
 cpSync(join(dataOut, "pojasevi"), join(out, "data", "pojasevi"), { recursive: true });
 
+// The page reads staze.geojson in the map's worker; for the names of the pairs it parses only
+// the properties of the Staze, keyed like the lookup in app.js ("<strana>:<id>").
+const staze = JSON.parse(readFileSync(join(dataOut, "staze.geojson"), "utf8"));
+const index = Object.fromEntries(staze.features.map(({ properties: p }) => [`${p.strana}:${p.id}`, p]));
+writeFileSync(join(out, "data", "staze-index.json"), JSON.stringify(index));
+
 // In the repo the page sits next to ../data/; in dist/ the data sits inside it.
 const config = readFileSync(join(web, "config.js"), "utf8");
 const deployed = config.replaceAll("../data/out/", "data/").replaceAll("../data/", "data/");
@@ -56,7 +62,7 @@ writeFileSync(
     "  X-Content-Type-Options: nosniff",
     "  X-Frame-Options: DENY",
     "/data/*",
-    "  Cache-Control: no-store",
+    "  Cache-Control: no-cache",
     "",
   ].join("\n"),
 );

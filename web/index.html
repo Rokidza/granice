@@ -5,8 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Granice – karta rizika prelaska</title>
+  <!-- Tile and style servers of the default basemap: connect while the page is still loading. -->
+  <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
   <link rel="stylesheet" href="vendor/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
+  <!-- Deferred scripts download beside the stylesheet and run, in order, once the page is parsed. -->
+  <script defer src="vendor/maplibre-gl.js"></script>
+  <script defer src="vendor/pmtiles.js"></script>
+  <script defer src="vendor/basemaps.js"></script>
+  <link rel="modulepreload" href="app.js">
 </head>
 <body>
   <div class="layout">
@@ -124,9 +132,6 @@
   </div>
 
 
-  <script src="vendor/maplibre-gl.js"></script>
-  <script src="vendor/pmtiles.js"></script>
-  <script src="vendor/basemaps.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
