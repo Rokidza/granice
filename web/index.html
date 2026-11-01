@@ -22,51 +22,48 @@
       <header class="brand">
         <div>
           <h1>Granice</h1>
-          <p>Gdje se putovi s obje strane granice približavaju: mogući prelasci HR–BiH</p>
+          <p>Hrvatska | BiH · mjesta na kojima se putovi približavaju granici</p>
         </div>
         <button type="button" id="panel-close" class="icon-button" title="Sakrij panel i vidi cijelu kartu" aria-label="Sakrij panel">‹</button>
       </header>
 
-      <nav class="tabs" role="tablist" aria-label="Dijelovi panela">
-        <button type="button" role="tab" id="tab-prelasci" data-tab="prelasci" aria-selected="true" aria-controls="pane-prelasci">Prelasci</button>
-        <button type="button" role="tab" id="tab-podrucja" data-tab="podrucja" aria-selected="false" aria-controls="pane-podrucja" tabindex="-1">Područja</button>
-        <button type="button" role="tab" id="tab-slojevi" data-tab="slojevi" aria-selected="false" aria-controls="pane-slojevi" tabindex="-1">Slojevi</button>
+      <nav class="cards" role="tablist" aria-label="Vrsta mjesta">
+        <button type="button" role="tab" id="tab-izravni" data-tab="izravni" class="card cat-izravni" aria-selected="true" aria-controls="pane-lista">
+          <span class="card-top"><span class="card-icon" id="icon-izravni" aria-hidden="true"></span><span class="card-count" id="izravni-count">0</span></span>
+          <span class="card-label">Izravni prelazi</span>
+        </button>
+        <button type="button" role="tab" id="tab-kopno" data-tab="kopno" class="card cat-kopno" aria-selected="false" tabindex="-1" aria-controls="pane-lista">
+          <span class="card-top"><span class="card-icon" id="icon-kopno" aria-hidden="true"></span><span class="card-count" id="areas-count-kopno">0</span></span>
+          <span class="card-label">Blizu granice</span>
+        </button>
+        <button type="button" role="tab" id="tab-rijeka" data-tab="rijeka" class="card cat-rijeka" aria-selected="false" tabindex="-1" aria-controls="pane-lista">
+          <span class="card-top"><span class="card-icon" id="icon-rijeka" aria-hidden="true"></span><span class="card-count" id="areas-count-rijeka">0</span></span>
+          <span class="card-label">Preko rijeke</span>
+        </button>
       </nav>
 
-      <div class="tab-body">
-      <div class="pane" id="pane-prelasci" role="tabpanel" aria-labelledby="tab-prelasci" data-pane="prelasci">
-      <details class="panel cat-izravni" open>
-        <summary><h2>Izravni prelasci</h2><span class="count" id="izravni-count">0</span></summary>
-        <p id="izravni-summary" class="summary" aria-live="polite"></p>
-        <ol id="izravni" class="areas" aria-label="Staze koje presijecaju granicu, klik zumira na kartu"></ol>
-      </details>
-      </div>
-
-      <div class="pane" id="pane-podrucja" role="tabpanel" aria-labelledby="tab-podrucja" data-pane="podrucja" hidden>
-      <section class="panel" aria-labelledby="h-prag">
-        <h2 id="h-prag">Blizina staza</h2>
-        <div class="controls">
+      <div class="finder" id="finder">
+        <div class="band-control" id="band-control" hidden>
           <p>Najbliži par staza <output id="band-value"></output></p>
           <input id="band-max" type="range" min="0" step="50" aria-label="Najbliži par staza do (m)">
-          <p class="hint">Kritična područja su dijelovi granice na kojima su ceste, makadami i staze s obje strane toliko blizu.</p>
         </div>
-      </section>
-
-      <details class="panel cat-kopno" open>
-        <summary><h2>Kritična područja: blizu granice</h2><span class="count" id="areas-count-kopno">0</span></summary>
-        <p id="areas-summary-kopno" class="summary" aria-live="polite"></p>
-        <ol id="areas-kopno" class="areas" aria-label="Kritična područja bez rijeke, klik zumira na kartu"></ol>
-      </details>
-
-      <details class="panel cat-rijeka" open>
-        <summary><h2>Kritična područja: preko rijeke</h2><span class="count" id="areas-count-rijeka">0</span></summary>
-        <p id="areas-summary-rijeka" class="summary" aria-live="polite"></p>
-        <ol id="areas-rijeka" class="areas" aria-label="Kritična područja gdje treba prijeći rijeku, klik zumira na kartu"></ol>
-      </details>
-
+        <div class="list-head">
+          <div class="list-summary">
+            <p id="izravni-summary" class="summary" aria-live="polite"></p>
+            <p id="areas-summary-kopno" class="summary" aria-live="polite" hidden></p>
+            <p id="areas-summary-rijeka" class="summary" aria-live="polite" hidden></p>
+          </div>
+        </div>
       </div>
 
-      <div class="pane" id="pane-slojevi" role="tabpanel" aria-labelledby="tab-slojevi" data-pane="slojevi" hidden>
+      <div class="scroll" id="scroll">
+        <div class="pane" id="pane-lista" role="tabpanel" data-pane="lista">
+          <ol id="izravni" class="areas" data-cat="izravni" aria-label="Staze koje presijecaju granicu, klik zumira na kartu"></ol>
+          <ol id="areas-kopno" class="areas" data-cat="kopno" aria-label="Područja gdje su staze s obje strane blizu granice, klik zumira na kartu" hidden></ol>
+          <ol id="areas-rijeka" class="areas" data-cat="rijeka" aria-label="Područja gdje treba prijeći rijeku, klik zumira na kartu" hidden></ol>
+        </div>
+
+        <div class="pane" id="pane-slojevi" data-pane="slojevi" hidden>
       <section class="panel" aria-labelledby="h-layers">
         <div class="panel-head">
           <h2 id="h-layers">Slojevi</h2>
@@ -107,8 +104,12 @@
         <p id="osm-date"></p>
         <p>© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>. Izračunati slojevi objavljeni su pod licencom <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL</a>: <span id="data-links"></span></p>
       </footer>
+        </div>
       </div>
-      </div>
+
+      <footer class="dock-foot">
+        <button type="button" id="layers-toggle" class="layers-toggle" aria-expanded="false" aria-controls="pane-slojevi"><span>Slojevi, legenda i napomene</span><span aria-hidden="true">›</span></button>
+      </footer>
     </aside>
 
     <main>

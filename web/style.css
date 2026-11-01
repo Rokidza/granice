@@ -70,12 +70,40 @@ ul, ol { list-style: none; }
 }
 .layout.panel-closed .sidebar { display: none; }
 .sidebar .brand { padding: 0 14px; }
-.tabs { display: flex; gap: 2px; margin: 0 12px; padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.tabs button { flex: 1; padding: 5px 4px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-2); font-weight: 600; }
-.tabs button:hover { color: var(--ink); }
-.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / .18); }
-.tab-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 12px; }
+[hidden] { display: none !important; }
+
+/* Three cards say what the panel finds and choose which list shows. They stay in place. */
+.cards { display: flex; gap: 8px; padding: 0 14px; }
+.card {
+  flex: 1; min-width: 0; display: grid; gap: 6px; padding: 9px 10px; text-align: left; border-radius: 12px;
+  background: var(--raised); border: 1px solid var(--line); color: var(--ink);
+}
+.card-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.card-icon img { display: block; width: 22px; height: 22px; }
+.card-count { font-size: 24px; font-weight: 700; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.card-label { font-size: 11.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.card[aria-selected="true"] { border: 1.5px solid var(--accent); padding: 8.5px 9.5px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.card[aria-selected="true"] .card-label { color: var(--accent); }
+
+/* Search, the limit of the pair distance and the order: fixed above the list */
+.finder { display: grid; gap: 8px; padding: 2px 14px 0; }
+.band-control { display: grid; gap: 4px; padding: 8px 0 2px; }
+.band-control p { margin: 0; color: var(--ink-2); font-weight: 600; }
+.band-control output { color: var(--accent); font-weight: 700; }
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.list-head .summary { margin: 0; font-size: 12px; }
+.list-head .summary strong { font-size: 13px; }
+
+/* The one scroll of the panel */
+.scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 4px 14px; }
 .pane[hidden] { display: none; }
+#pane-slojevi { padding-right: 6px; }
+.dock-foot { padding: 0 14px 10px; border-top: 1px solid var(--line); }
+.layers-toggle {
+  display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 6px; padding: 6px 4px;
+  background: transparent; border: 0; color: var(--ink); font-weight: 600; font-size: 12.5px;
+}
+.layers-toggle[aria-expanded="true"] span:last-child { transform: rotate(180deg); }
 .brand { padding: 2px 4px 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .brand h1 { font-size: 19px; letter-spacing: -.01em; }
 .brand p { color: var(--ink-2); font-size: 12px; }
@@ -110,27 +138,33 @@ input[type="range"] { width: 100%; accent-color: var(--ink-2); margin: 0; }
 .hint { color: var(--muted); font-size: 12px; }
 label.inline { display: flex; align-items: center; gap: 8px; }
 /* Kritična područja: one button per area, a click zooms to it */
-.areas { list-style: none; margin: 8px 0 0; padding: 0 2px 0 0; display: grid; gap: 6px; max-height: 240px; overflow-y: auto; }
+.areas { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
 .areas:empty { display: none; }
 .cat-izravni { --cat: var(--cat-izravni); }
 .cat-kopno { --cat: var(--cat-kopno); }
 .cat-rijeka { --cat: var(--cat-rijeka); }
+/* An entry: the place, and on the right what matters (a distance, a kind of road). The chosen one opens. */
+.areas li { border-radius: 10px; }
 .area-button {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; font: inherit;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; font: inherit;
   text-align: left; color: var(--ink); background: var(--raised); border: 1px solid var(--line);
-  border-radius: 8px; cursor: pointer;
+  border-radius: 10px; cursor: pointer;
 }
-.area-button:hover { border-color: var(--cat, var(--ink-2)); }
+.area-button:hover { border-color: var(--ink-2); }
 .area-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.area-button[aria-current="true"] { border: 2px solid var(--cat, var(--ink-2)); padding: 7px 9px; }
-.area-rank {
-  display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%;
-  background: var(--cat, var(--ink-2)); color: var(--surface); font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums;
-}
-.area-button.cat-kopno .area-rank, .area-button.cat-rijeka .area-rank { color: #fff; }
-.area-text { display: grid; gap: 1px; min-width: 0; }
-.area-head span { color: var(--ink-2); }
-.area-text small { color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
+.area-text { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.area-place { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.area-place.loading { color: var(--muted); font-weight: 400; }
+.area-sub { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.area-sub:empty { display: none; }
+.area-value { flex: none; max-width: 48%; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.cat-izravni .area-value { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.area-button[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border: 1.5px solid var(--accent); padding: 7.5px 9.5px; }
+.area-detail { display: none; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 6px 10px 2px; }
+.area-button[aria-current="true"] + .area-detail { display: flex; margin-bottom: 4px; }
+.area-detail-text { color: var(--ink-2); font-size: 12px; }
+.area-actions { display: inline-flex; gap: 6px; }
+.small-action { flex: none; padding: 3px 9px; font-size: 11.5px; font-weight: 600; border-radius: 7px; }
 
 /* Small switch: ignore red segments on Riječna granica (under Napredno) */
 .small-toggle {
