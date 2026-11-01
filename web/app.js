@@ -1305,11 +1305,11 @@ function showCrossing(feature) {
   select({});
   markListEntry(`izravni-${p.segment}`);
   const { map } = state;
-  // The place goes to the middle of the free map, leaving room on its right for the card.
+  // The place goes to the middle of the free map, above the docked card.
   const wide = !window.matchMedia("(max-width: 760px)").matches;
   map.flyTo({
     center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 15),
-    offset: [wide ? (initialPadding().left - 380) / 2 : 0, 0], // a one-off shift: the map keeps no padding
+    offset: [wide ? initialPadding().left / 2 : 0, -90], // a one-off shift (the map keeps no padding): centred in the free map, above the card
     ...GLIDE,
   });
   state.openPopup?.(feature.geometry.coordinates, crossingPopup(feature));
@@ -1687,21 +1687,73 @@ function coordinatesRow(lngLat) {
   return row;
 }
 
+/** The card of a chosen place is docked at the bottom of the map, so it covers nothing around the
+ * place. A thin line leads from it to the place, which is ringed. */
+function createDock(map) {
+  const main = document.querySelector("main");
+  const svgNS = "http://www.w3.org/2000/svg";
+  const line = document.createElementNS(svgNS, "svg");
+  line.classList.add("dock-line");
+  const path = document.createElementNS(svgNS, "line");
+  line.append(path);
+  const card = element("div", undefined, "dock-card");
+  const body = element("div", undefined, "dock-body");
+  const close = element("button", "×", "dock-close");
+  close.type = "button";
+  close.title = "Zatvori";
+  close.setAttribute("aria-label", "Zatvori");
+  card.append(body, close);
+  line.hidden = card.hidden = true;
+  main.append(line, card);
+  const ring = new globalThis.maplibregl.Marker({ element: element("div", undefined, "dock-ring") });
+  const dock = { onHide: null, at: null };
+  const RING = 16; // the line stops at the ring
+  const draw = () => {
+    if (!dock.at) return;
+    const point = map.project(dock.at);
+    const box = main.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    const from = { x: Math.min(Math.max(point.x, c.left - box.left + 14), c.right - box.left - 14), y: c.top - box.top };
+    const length = Math.hypot(point.x - from.x, point.y - from.y);
+    line.hidden = length < RING + 4;
+    if (line.hidden) return;
+    const k = (length - RING) / length;
+    path.setAttribute("x1", from.x);
+    path.setAttribute("y1", from.y);
+    path.setAttribute("x2", from.x + (point.x - from.x) * k);
+    path.setAttribute("y2", from.y + (point.y - from.y) * k);
+  };
+  map.on("move", draw);
+  map.on("resize", draw);
+  dock.show = (lngLat, content) => {
+    body.replaceChildren(content);
+    dock.at = lngLat;
+    card.hidden = false;
+    ring.setLngLat(lngLat).addTo(map);
+    draw();
+  };
+  dock.hide = () => {
+    if (card.hidden) return;
+    card.hidden = line.hidden = true;
+    dock.at = null;
+    ring.remove();
+    dock.onHide?.();
+  };
+  close.addEventListener("click", dock.hide);
+  return dock;
+}
+
 function setupClicks() {
   const { map } = state;
-  let popup = null;
+  const dock = createDock(map);
   const open = (lngLat, content) => {
-    popup?.remove();
     coordsPopup?.remove();
-    // Wide screens: the card sits beside the place, so the place and the roads around it stay visible.
-    const beside = !window.matchMedia("(max-width: 760px)").matches;
-    popup = new globalThis.maplibregl.Popup({ maxWidth: "260px", className: "card", offset: beside ? [16, 0] : 14, ...(beside ? { anchor: "left" } : {}) })
-      .setLngLat(lngLat).setDOMContent(content).addTo(map);
-    popup.on("close", () => { state.popupOpen = false; });
+    dock.show(lngLat, content);
     state.popupOpen = true; // the hover tooltips wait while it is open
   };
+  dock.onHide = () => { state.popupOpen = false; };
   state.openPopup = open;
-  setupLongPress(() => popup?.remove());
+  setupLongPress(() => dock.hide());
   map.on("click", (event) => {
     if (state.measure.active) return; // clicks set measuring points instead
     if (state.longPressed) { // the click that ends a long press only shows the coordinates
@@ -1731,7 +1783,7 @@ function setupClicks() {
     }
     // A click on the border itself does nothing: first closes only the text box, then also the chosen area.
     if (state.popupOpen || coordsPopup?.isOpen()) {
-      popup?.remove();
+      dock.hide();
       coordsPopup?.remove();
     } else {
       clearSelection();
