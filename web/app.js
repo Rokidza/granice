@@ -1704,7 +1704,8 @@ function createDock(map) {
   close.title = "Zatvori";
   close.setAttribute("aria-label", "Zatvori");
   card.append(body, close);
-  tail.hidden = card.hidden = true;
+  card.hidden = true;
+  tail.style.display = "none"; // an SVG element has no `hidden` property
   main.append(card, tail);
   const dock = { onHide: null, at: null, side: null };
   const GAP = { x: 46, y: 38 }; // from the place to the nearest corner of the bubble
@@ -1744,7 +1745,7 @@ function createDock(map) {
     const cover = base.map(([x, y]) => [x, y + sy * 2]); // two pixels into the bubble, to hide its border at the root
     fill.setAttribute("points", [...cover, tip].map((p) => p.join(",")).join(" "));
     edge.setAttribute("points", [base[0], tip, base[1]].map((p) => p.join(",")).join(" "));
-    tail.hidden = false;
+    tail.style.display = "";
   };
   map.on("move", place);
   map.on("resize", place);
@@ -1757,7 +1758,8 @@ function createDock(map) {
   };
   dock.hide = () => {
     if (card.hidden) return;
-    card.hidden = tail.hidden = true;
+    card.hidden = true;
+    tail.style.display = "none";
     dock.at = null;
     dock.onHide?.();
   };
