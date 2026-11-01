@@ -1688,7 +1688,7 @@ function coordinatesRow(lngLat) {
 }
 
 /** The card of a chosen place is a speech bubble set a little away from it, on the side that has
- * room, so the place and the roads around it stay in view. Its tail points at the ringed place. */
+ * room, so the place and the roads around it stay in view. Its tail points at the place. */
 function createDock(map) {
   const main = document.querySelector("main");
   const svgNS = "http://www.w3.org/2000/svg";
@@ -1706,10 +1706,9 @@ function createDock(map) {
   card.append(body, close);
   tail.hidden = card.hidden = true;
   main.append(card, tail);
-  const ring = new globalThis.maplibregl.Marker({ element: element("div", undefined, "dock-ring") });
   const dock = { onHide: null, at: null, side: null };
   const GAP = { x: 46, y: 38 }; // from the place to the nearest corner of the bubble
-  const RING = 17; // the tail stops at the ring
+  const RING = 15; // the tail stops short of the place, so it does not hide its icon
   // Up-right first, like a speech bubble; the others when it would leave the free map.
   const SIDES = [[1, -1], [-1, -1], [1, 1], [-1, 1]];
   const place = () => {
@@ -1754,14 +1753,12 @@ function createDock(map) {
     dock.at = lngLat;
     dock.side = null;
     card.hidden = false;
-    ring.setLngLat(lngLat).addTo(map);
     place();
   };
   dock.hide = () => {
     if (card.hidden) return;
     card.hidden = tail.hidden = true;
     dock.at = null;
-    ring.remove();
     dock.onHide?.();
   };
   close.addEventListener("click", dock.hide);
