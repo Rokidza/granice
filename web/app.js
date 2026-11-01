@@ -1377,7 +1377,6 @@ function crossingPopup(feature, { compact = false } = {}) {
   if (compact) return root;
   root.append(
     placeLine(feature.geometry.coordinates, "place"),
-    element("p", "Staza prelazi granicu izvan službenog prijelaza."),
     element("p", coordinatesText(feature.geometry.coordinates), "muted"),
   );
   return root;
@@ -1696,7 +1695,7 @@ function setupClicks() {
     coordsPopup?.remove();
     // Wide screens: the card sits beside the place, so the place and the roads around it stay visible.
     const beside = !window.matchMedia("(max-width: 760px)").matches;
-    popup = new globalThis.maplibregl.Popup({ maxWidth: "340px", offset: beside ? [20, 0] : 14, ...(beside ? { anchor: "left" } : {}) })
+    popup = new globalThis.maplibregl.Popup({ maxWidth: "260px", className: "card", offset: beside ? [16, 0] : 14, ...(beside ? { anchor: "left" } : {}) })
       .setLngLat(lngLat).setDOMContent(content).addTo(map);
     popup.on("close", () => { state.popupOpen = false; });
     state.popupOpen = true; // the hover tooltips wait while it is open

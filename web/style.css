@@ -252,6 +252,14 @@ main { position: absolute; inset: 0; }
 }
 .maplibregl-popup-tip { border-top-color: var(--surface) !important; border-bottom-color: var(--surface) !important; }
 .maplibregl-popup-close-button { color: var(--ink); }
+/* The card of a chosen place: small and rounded, with an accent edge and no tip, so it covers little. */
+.card .maplibregl-popup-content {
+  min-width: 0; max-width: 260px; padding: 7px 26px 7px 11px; font-size: 12px; line-height: 1.35;
+  border-radius: 16px; border-left: 4px solid var(--danger);
+}
+.card .maplibregl-popup-tip { display: none; }
+.card .maplibregl-popup-close-button { top: 3px; right: 5px; font-size: 16px; }
+.card .popup.why p { margin: 3px 0 0; }
 .popup h3 { margin: 0 0 6px; font-size: 14px; }
 .popup.why p { margin: 6px 0 0; }
 .popup.why .muted { color: var(--muted); font-size: 12px; }
