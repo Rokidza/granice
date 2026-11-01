@@ -1305,11 +1305,11 @@ function showCrossing(feature) {
   select({});
   markListEntry(`izravni-${p.segment}`);
   const { map } = state;
-  // The place goes to the middle of the free map, above the docked card.
+  // The place goes to the middle of the free map, with room for its bubble.
   const wide = !window.matchMedia("(max-width: 760px)").matches;
   map.flyTo({
     center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 15),
-    offset: [wide ? initialPadding().left / 2 : 0, -90], // a one-off shift (the map keeps no padding): centred in the free map, above the card
+    offset: [wide ? initialPadding().left / 2 - 100 : 0, 50], // a one-off shift (the map keeps no padding): the place sits left of and below the middle of the free map, leaving room for the bubble up and to its right
     ...GLIDE,
   });
   state.openPopup?.(feature.geometry.coordinates, crossingPopup(feature));
@@ -1687,15 +1687,16 @@ function coordinatesRow(lngLat) {
   return row;
 }
 
-/** The card of a chosen place is docked at the bottom of the map, so it covers nothing around the
- * place. A thin line leads from it to the place, which is ringed. */
+/** The card of a chosen place is a speech bubble set a little away from it, on the side that has
+ * room, so the place and the roads around it stay in view. Its tail points at the ringed place. */
 function createDock(map) {
   const main = document.querySelector("main");
   const svgNS = "http://www.w3.org/2000/svg";
-  const line = document.createElementNS(svgNS, "svg");
-  line.classList.add("dock-line");
-  const path = document.createElementNS(svgNS, "line");
-  line.append(path);
+  const tail = document.createElementNS(svgNS, "svg");
+  tail.classList.add("dock-line");
+  const fill = document.createElementNS(svgNS, "polygon");
+  const edge = document.createElementNS(svgNS, "polyline");
+  tail.append(fill, edge);
   const card = element("div", undefined, "dock-card");
   const body = element("div", undefined, "dock-body");
   const close = element("button", "×", "dock-close");
@@ -1703,38 +1704,62 @@ function createDock(map) {
   close.title = "Zatvori";
   close.setAttribute("aria-label", "Zatvori");
   card.append(body, close);
-  line.hidden = card.hidden = true;
-  main.append(line, card);
+  tail.hidden = card.hidden = true;
+  main.append(card, tail);
   const ring = new globalThis.maplibregl.Marker({ element: element("div", undefined, "dock-ring") });
-  const dock = { onHide: null, at: null };
-  const RING = 16; // the line stops at the ring
-  const draw = () => {
+  const dock = { onHide: null, at: null, side: null };
+  const GAP = { x: 46, y: 38 }; // from the place to the nearest corner of the bubble
+  const RING = 17; // the tail stops at the ring
+  // Up-right first, like a speech bubble; the others when it would leave the free map.
+  const SIDES = [[1, -1], [-1, -1], [1, 1], [-1, 1]];
+  const place = () => {
     if (!dock.at) return;
     const point = map.project(dock.at);
-    const box = main.getBoundingClientRect();
-    const c = card.getBoundingClientRect();
-    const from = { x: Math.min(Math.max(point.x, c.left - box.left + 14), c.right - box.left - 14), y: c.top - box.top };
-    const length = Math.hypot(point.x - from.x, point.y - from.y);
-    line.hidden = length < RING + 4;
-    if (line.hidden) return;
-    const k = (length - RING) / length;
-    path.setAttribute("x1", from.x);
-    path.setAttribute("y1", from.y);
-    path.setAttribute("x2", from.x + (point.x - from.x) * k);
-    path.setAttribute("y2", from.y + (point.y - from.y) * k);
+    const { width: W, height: H } = main.getBoundingClientRect();
+    const w = card.offsetWidth;
+    const h = card.offsetHeight;
+    const wide = !window.matchMedia("(max-width: 760px)").matches;
+    const free = { left: wide ? 402 : 8, right: W - 8, top: 56, bottom: H - 30 };
+    const rectFor = ([sx, sy]) => ({
+      left: sx > 0 ? point.x + GAP.x : point.x - GAP.x - w,
+      top: sy < 0 ? point.y - GAP.y - h : point.y + GAP.y,
+    });
+    const fits = (side) => {
+      const r = rectFor(side);
+      return r.left >= free.left && r.left + w <= free.right && r.top >= free.top && r.top + h <= free.bottom;
+    };
+    const side = (dock.side && fits(dock.side) ? dock.side : SIDES.find(fits)) ?? SIDES[0];
+    dock.side = side;
+    const [sx, sy] = side;
+    const { left, top } = rectFor(side);
+    card.style.left = `${left}px`;
+    card.style.top = `${top}px`;
+    // The tail leaves the bubble's edge nearest the place, from its nearest corner.
+    const cornerX = sx > 0 ? left : left + w;
+    const cornerY = sy < 0 ? top + h : top;
+    const base = [[cornerX + sx * 14, cornerY], [cornerX + sx * 36, cornerY]];
+    const dx = point.x - base[0][0];
+    const dy = point.y - base[0][1];
+    const length = Math.hypot(dx, dy) || 1;
+    const tip = [point.x - (dx / length) * RING, point.y - (dy / length) * RING];
+    const cover = base.map(([x, y]) => [x, y + sy * 2]); // two pixels into the bubble, to hide its border at the root
+    fill.setAttribute("points", [...cover, tip].map((p) => p.join(",")).join(" "));
+    edge.setAttribute("points", [base[0], tip, base[1]].map((p) => p.join(",")).join(" "));
+    tail.hidden = false;
   };
-  map.on("move", draw);
-  map.on("resize", draw);
+  map.on("move", place);
+  map.on("resize", place);
   dock.show = (lngLat, content) => {
     body.replaceChildren(content);
     dock.at = lngLat;
+    dock.side = null;
     card.hidden = false;
     ring.setLngLat(lngLat).addTo(map);
-    draw();
+    place();
   };
   dock.hide = () => {
     if (card.hidden) return;
-    card.hidden = line.hidden = true;
+    card.hidden = tail.hidden = true;
     dock.at = null;
     ring.remove();
     dock.onHide?.();

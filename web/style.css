@@ -252,12 +252,11 @@ main { position: absolute; inset: 0; }
 }
 .maplibregl-popup-tip { border-top-color: var(--surface) !important; border-bottom-color: var(--surface) !important; }
 .maplibregl-popup-close-button { color: var(--ink); }
-/* The card of a chosen place: docked at the bottom of the free map, joined to the place by a thin line. */
+/* The card of a chosen place: a speech bubble set a little away from it (placed by createDock). */
 .dock-card {
-  position: absolute; z-index: 4; bottom: 34px; left: 402px; /* beside the panel, clear of the overview in the right corner */
-  width: min(380px, max(240px, calc(100% - 650px))); max-height: 38vh; overflow: auto; box-sizing: border-box;
-  padding: 9px 30px 9px 13px; background: var(--surface); color: var(--ink); font: 13px/1.4 system-ui, sans-serif;
-  border-radius: 16px; border-left: 4px solid var(--danger); box-shadow: var(--shadow);
+  position: absolute; z-index: 4; width: max-content; max-width: min(250px, calc(100% - 16px)); max-height: 40vh; overflow: auto;
+  box-sizing: border-box; padding: 8px 26px 8px 12px; background: var(--surface); color: var(--ink);
+  font: 12px/1.4 system-ui, sans-serif; border-radius: 12px; border: 1.5px solid var(--ink); box-shadow: var(--shadow);
 }
 .dock-card[hidden], .dock-line[hidden] { display: none; }
 .dock-close {
@@ -266,13 +265,13 @@ main { position: absolute; inset: 0; }
 }
 .dock-close:hover { color: var(--ink); }
 .dock-card .popup.why p { margin: 3px 0 0; }
-.dock-line { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; overflow: visible; }
-.dock-line line { stroke: #ffffff; stroke-width: 1.5; stroke-dasharray: 4 3; filter: drop-shadow(0 0 2px rgba(0,0,0,0.8)); }
+.dock-line { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; overflow: visible; }
+.dock-line polygon { fill: var(--surface); }
+.dock-line polyline { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; }
 .dock-ring {
   width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%; pointer-events: none;
   border: 2px solid #ffffff; box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 8px rgba(0,0,0,0.6);
 }
-@media (max-width: 760px) { .dock-card { left: 12px; width: calc(100% - 24px); bottom: 40px; } }
 .popup h3 { margin: 0 0 6px; font-size: 14px; }
 .popup.why p { margin: 6px 0 0; }
 .popup.why .muted { color: var(--muted); font-size: 12px; }
