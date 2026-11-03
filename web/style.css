@@ -377,3 +377,9 @@ main { position: absolute; inset: 0; }
 .popup.why .place { color: var(--ink); font-weight: 600; }
 .area-text .area-place:empty { display: none; }
 .area-text .area-place { color: var(--ink); font-weight: 600; }
+
+/* Traffic table of a crossing (popup) */
+.traffic-table { border-collapse: collapse; margin: 8px 0 0; width: 100%; font-size: 12px; }
+.traffic-table caption { text-align: left; color: var(--muted); padding-bottom: 2px; }
+.traffic-table th { text-align: left; font-weight: 600; color: var(--ink-2); padding: 1px 8px 1px 0; }
+.traffic-table td { text-align: right; font-variant-numeric: tabular-nums; padding: 1px 0 1px 8px; }

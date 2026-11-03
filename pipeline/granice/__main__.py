@@ -195,6 +195,7 @@ def main() -> None:
             help="geofabrik = country extracts read locally (default), overpass = public API",
         )
         _add_parameter_options(command)
+    commands.add_parser("promet", help="fetch border traffic per crossing from DZS (PX-Web)")
     serve = commands.add_parser("serve", help="serve the web page on localhost")
     serve.add_argument("--port", type=int, default=8000)
 
@@ -202,6 +203,10 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     if args.command == "serve":
         _serve(args.port)
+    elif args.command == "promet":
+        from granice.promet import write_promet
+
+        write_promet(OUT_DIR, RAW_DIR / "dzs")
     else:
         area = AREAS[args.podrucje]
         source_class = GeofabrikSource if args.izvor == "geofabrik" else OverpassSource

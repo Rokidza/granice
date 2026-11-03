@@ -13,7 +13,7 @@ const web = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(web, "dist");
 const dataOut = join(web, "..", "data", "out");
 
-const PAGE_FILES = ["index.html", "app.js", "style.css", "js/colors.js", "js/critical.js", "js/geodesy.js", "js/places.js", "js/package.json"];
+const PAGE_FILES = ["index.html", "app.js", "style.css", "js/colors.js", "js/critical.js", "js/geodesy.js", "js/places.js", "js/promet.js", "js/package.json"];
 const VENDOR_FILES = ["maplibre-gl.js", "maplibre-gl.css", "pmtiles.js", "basemaps.js"];
 const DATA_FILES = [
   "meta.json", "staze.geojson", "granica.geojson", "segmenti.geojson", "prijelazi.geojson",
@@ -40,6 +40,10 @@ for (const file of PAGE_FILES) cpSync(join(web, file), join(out, file));
 for (const file of VENDOR_FILES) cpSync(join(web, "vendor", file), join(out, "vendor", file));
 for (const file of DATA_FILES) cpSync(join(dataOut, file), join(out, "data", file));
 cpSync(join(dataOut, "pojasevi"), join(out, "data", "pojasevi"), { recursive: true });
+// Traffic per crossing; optional, the page leaves it out without it.
+for (const optional of ["promet_prijelaza.geojson"]) {
+  if (existsSync(join(dataOut, optional))) cpSync(join(dataOut, optional), join(out, "data", optional), { recursive: true });
+}
 
 // The page reads staze.geojson in the map's worker; for the names of the pairs it parses only
 // the properties of the Staze, keyed like the lookup in app.js ("<strana>:<id>").

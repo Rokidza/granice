@@ -19,6 +19,7 @@ import {
 } from "./js/critical.js";
 import { geodesicDistance } from "./js/geodesy.js";
 import { placeAt, placeShort, placeText } from "./js/places.js";
+import { PROMET_LAYERS, PROMET_SOURCE, prometLayers, prometPopup } from "./js/promet.js";
 
 const $ = (id) => document.getElementById(id);
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -251,6 +252,22 @@ const roadScaled = (width) => [
 const ICON_SIZE = ["interpolate", ["linear"], ["zoom"], 7, 0.3, 10, 0.4, 13, 0.5, 15, 0.6];
 const PIN_SIZE = ["interpolate", ["linear"], ["zoom"], 7, 0.36, 10, 0.46, 13, 0.58, 15, 0.7];
 
+// A symbol under the mouse is drawn again a little larger on top (`ikona-hover`), so it shows it can be clicked.
+const HOVER_GROW = 1.3;
+const HOVER_ICONS = {
+  "prijelazi-sluzbeni": { image: "ikona-prijelaz", anchor: "center", pin: 0 },
+  "prijelazi-izravni": { image: "ikona-izravni", anchor: "center", pin: 1 },
+  "podrucja-kopno": { image: "pin-kopno", anchor: "bottom", pin: 1 },
+  "podrucja-rijeka": { image: "pin-rijeka", anchor: "bottom", pin: 1 },
+};
+// The sizes of ICON_SIZE and PIN_SIZE (zoom, size pairs after the three head items), grown.
+const hoverSize = ["interpolate", ["linear"], ["zoom"],
+  ...[0, 1, 2, 3].flatMap((i) => [
+    ICON_SIZE[3 + 2 * i],
+    ["*", HOVER_GROW, ["case", ["==", ["get", "pin"], 1], PIN_SIZE[4 + 2 * i], ICON_SIZE[4 + 2 * i]]],
+  ]),
+];
+
 const stanjeIs = (value) => ["==", ["get", "stanje"], value];
 
 /** Paint properties that depend on the colour theme, by layer id. */
@@ -415,6 +432,8 @@ const LAYER_GROUPS = [
   { id: "segmenti", label: "Stanje granice", hint: "Granica bez podataka, sporna granica i granica uz službeni prijelaz",
     layers: ["segmenti-klik", "segmenti-nedovoljno", "segmenti-sporna", "segmenti-prijelaz"] },
   { id: "prijelazi", label: "Službeni prijelazi", hint: "Službeni granični prijelazi", layers: ["prijelazi-sluzbeni"] },
+  { id: "promet", label: "Promet na prijelazima", hint: "Putnici godišnje po cestovnom prijelazu (DZS), klik daje pojedinosti",
+    layers: PROMET_LAYERS },
   { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica"] },
   { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
@@ -660,7 +679,7 @@ function applyVisibility() {
   const { map } = state;
   for (const group of LAYER_GROUPS) {
     const visible = !state.plain && !hiddenGroups.has(group.id);
-    for (const id of group.layers) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    for (const id of group.layers) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
   }
 }
 
@@ -1450,17 +1469,49 @@ function setupHover() {
         break;
       }
     }
+    if (!content && map.getLayer("promet-krugovi")) {
+      const traffic = hit(near, "promet-krugovi");
+      if (traffic) content = prometPopup(traffic, element, { compact: true });
+    }
     if (!content) {
       const crossing = hit(near, "prijelazi-izravni");
       if (crossing) content = crossingPopup(crossing, { compact: true });
     }
+    setHoverIcon(hit, near);
     map.getCanvas().style.cursor = content ? "pointer" : state.measure.active ? "crosshair" : "";
     if (!content && hit(event.point, "rijecna-granica")) content = riverTooltip();
     if (content) tooltip.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
     else tooltip.remove();
   });
-  map.getCanvas().addEventListener("mouseleave", () => tooltip.remove());
+  map.getCanvas().addEventListener("mouseleave", () => {
+    tooltip.remove();
+    setHoverIcon(() => false, null);
+  });
 }
+
+let hoveredIcon = null;
+
+/** Draws the symbol under the mouse (if any of HOVER_ICONS) enlarged; `hit(point, layer)` as in setupHover. */
+function setHoverIcon(hit, near) {
+  let found = null;
+  for (const [layer, icon] of Object.entries(HOVER_ICONS)) {
+    const feature = map_hit(hit, near, layer);
+    if (feature) {
+      found = { icon, feature };
+      break;
+    }
+  }
+  const key = found ? `${found.feature.layer.id}:${found.feature.geometry.coordinates}` : null;
+  if (key === hoveredIcon) return;
+  hoveredIcon = key;
+  state.map.getSource("ikona-hover")?.setData({
+    type: "FeatureCollection",
+    features: found ? [{ type: "Feature", geometry: found.feature.geometry,
+      properties: { image: found.icon.image, anchor: found.icon.anchor, pin: found.icon.pin } }] : [],
+  });
+}
+
+const map_hit = (hit, near, layer) => near && state.map.getLayer(layer) && hit(near, layer);
 
 // ---------------------------------------------------------------------------------------------
 // Measuring tool: click two points, the air distance between them is written above the line.
@@ -1846,6 +1897,11 @@ function setupClicks() {
     }
     const box = [[event.point.x - 8, event.point.y - 8], [event.point.x + 8, event.point.y + 8]];
     const visible = (layer) => map.getLayoutProperty(layer, "visibility") !== "none";
+    const traffic = map.getLayer("promet-krugovi") && visible("promet-krugovi") && map.queryRenderedFeatures(box, { layers: ["promet-krugovi"] })[0];
+    if (traffic) {
+      open(traffic.geometry.coordinates, prometPopup(traffic, element));
+      return;
+    }
     const crossing = visible("prijelazi-izravni") && map.queryRenderedFeatures(box, { layers: ["prijelazi-izravni"] })[0];
     if (crossing) {
       showCrossing(state.crossings.find((f) => f.properties.segment === crossing.properties.segment) ?? crossing);
@@ -2016,6 +2072,15 @@ async function start() {
   map.addSource("par-hover", { type: "geojson", data: empty });
   map.addSource("mjerenje", { type: "geojson", data: empty });
   for (const layer of dataLayers(theme)) map.addLayer(layer);
+  map.addSource("ikona-hover", { type: "geojson", data: empty });
+  map.addLayer({ id: "ikona-hover", type: "symbol", source: "ikona-hover",
+    layout: { "icon-image": ["get", "image"], "icon-anchor": ["get", "anchor"], "icon-size": hoverSize,
+      "icon-allow-overlap": true, "icon-ignore-placement": true } });
+  state.promet = await fetch(CONFIG.dataDir + "promet_prijelaza.geojson").then((r) => (r.ok ? r.json() : null), () => null);
+  if (state.promet) {
+    map.addSource(PROMET_SOURCE, { type: "geojson", data: state.promet });
+    for (const layer of prometLayers()) map.addLayer(layer, "prijelazi-sluzbeni");
+  }
 
   renderToggles();
   setupClicks();
