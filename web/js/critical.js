@@ -9,16 +9,29 @@
 
 export const CATEGORIES = ["kopno", "rijeka"];
 
+/** How far from its segment the walking link of the pair may lie (`par_odmak_m`, set by the page). A
+ * pair kilometres along the border says nothing about this segment, so the segment is left out. */
+export const LINK_MAX_M = 500;
+
 /**
  * Whether a segment is assessed, is no Izravni prelazak, its nearest pair is not made of a Staza
- * that itself crosses the border (`par_prelazi`) and its nearest pair of Staze lies within
- * the limit. With `skipRiver` a segment on Riječna granica (`na_rijeci`) never is.
+ * that itself crosses the border (`par_prelazi`), the pair's link lies near the segment and its
+ * nearest pair of Staze lies within the limit. With `skipRiver` a segment on Riječna granica
+ * (`na_rijeci`) never is.
  * @param {{maxM: number, skipRiver?: boolean}} band
  */
 export function inReach(p, band) {
-  return p.stanje === "procijenjen" && !p.izravni_prelazak && !p.par_prelazi && p.udaljenost_m >= TOUCHING_M
+  return p.stanje === "procijenjen" && !p.izravni_prelazak && !p.par_prelazi && !joinsAcrossBorder(p) && !(p.par_odmak_m > LINK_MAX_M) && p.udaljenost_m >= TOUCHING_M
     && p.udaljenost_m <= band.maxM && !(band.skipRiver && p.na_rijeci);
 }
+
+// OSM often ends a road at the border and starts it again on the other side a few metres on. Such a
+// pair (both ends this close to the border, no farther apart than the gap) is one road that crosses
+// it, so it is no Kritično područje; the pipeline does not yet list it as an Izravni prelazak.
+const JOINED_ENDS_M = 5;
+const JOINED_GAP_M = 30;
+const joinsAcrossBorder = (p) => p.hr_od_granice_m <= JOINED_ENDS_M && p.bih_od_granice_m <= JOINED_ENDS_M
+  && p.udaljenost_m <= JOINED_GAP_M;
 
 // A pair closer than this touches: one Staza crosses the border, and the crossing lies in the
 // neighbouring segment (the Izravni prelazak), so it is no Kritično područje of its own.

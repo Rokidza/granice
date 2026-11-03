@@ -1000,6 +1000,9 @@ function recomputeAreas() {
   for (const feature of state.segments) {
     const q = feature.properties;
     q.par_prelazi = crossingWays.has(q.hr_staza_id) || crossingWays.has(q.bih_staza_id);
+    if (q.par_odmak_m === undefined) { // where the pair's link lies relative to the segment; fixed per segment
+      q.par_odmak_m = q.hr_tocka && q.bih_tocka ? linkPlacement(feature, { hr: q.hr_tocka, bih: q.bih_tocka }).distanceM : null;
+    }
   }
   state.areas = kriticnaPodrucja(state.segments, state.band);
   state.areaById = new Map(AREA_CATEGORIES.flatMap((kategorija) => state.areas[kategorija].map((area) => [area.id, area])));
@@ -1478,6 +1481,7 @@ function setupHover() {
       if (crossing) content = crossingPopup(crossing, { compact: true });
     }
     setHoverIcon(hit, near);
+    setLinkLabel(event.point);
     map.getCanvas().style.cursor = content ? "pointer" : state.measure.active ? "crosshair" : "";
     if (!content && hit(event.point, "rijecna-granica")) content = riverTooltip();
     if (content) tooltip.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
@@ -1486,7 +1490,37 @@ function setupHover() {
   map.getCanvas().addEventListener("mouseleave", () => {
     tooltip.remove();
     setHoverIcon(() => false, null);
+    setLinkLabel(null);
   });
+}
+
+let linkLabel = null;
+let linkLabelKey = null;
+
+/** Writes the length of a walking link ("105 m") on it while the mouse is over it: the dashed links
+ * of the zone and the link of the chosen pair. The line is thin, so a few pixels of slack. */
+function setLinkLabel(point) {
+  const { map } = state;
+  let feature = null;
+  if (point && !state.popupOpen) {
+    const layers = ["zona-veze", "parovi-linija"].filter((id) => map.getLayer(id) && map.getLayoutProperty(id, "visibility") !== "none");
+    if (layers.length) {
+      feature = map.queryRenderedFeatures([[point.x - 6, point.y - 6], [point.x + 6, point.y + 6]], { layers })
+        .find((f) => f.properties.udaljenost_m !== undefined);
+    }
+  }
+  const key = feature ? `${feature.properties.udaljenost_m}:${feature.geometry.coordinates.flat()}` : null;
+  if (key === linkLabelKey) return;
+  linkLabelKey = key;
+  linkLabel?.remove();
+  linkLabel = null;
+  if (!feature) return;
+  const [from, to] = [feature.geometry.coordinates[0], feature.geometry.coordinates.at(-1)];
+  const label = element("div", metres(feature.properties.udaljenost_m), "pair-label pair-gap");
+  label.style.pointerEvents = "none"; // under the mouse it would end the hover
+  linkLabel = new globalThis.maplibregl.Marker({ element: label, anchor: "center" })
+    .setLngLat([(from[0] + to[0]) / 2, (from[1] + to[1]) / 2])
+    .addTo(map);
 }
 
 let hoveredIcon = null;
