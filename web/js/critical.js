@@ -18,11 +18,11 @@ export const LINK_MAX_M = 500;
  * that itself crosses the border (`par_prelazi`), the pair's link lies near the segment and its
  * nearest pair of Staze lies within the limit. With `skipRiver` a segment on Riječna granica
  * (`na_rijeci`) never is.
- * @param {{maxM: number, skipRiver?: boolean}} band
+ * @param {{minM?: number, maxM: number, skipRiver?: boolean}} band
  */
 export function inReach(p, band) {
   return p.stanje === "procijenjen" && !p.izravni_prelazak && !p.par_prelazi && !joinsAcrossBorder(p) && !(p.par_odmak_m > LINK_MAX_M) && p.udaljenost_m >= TOUCHING_M
-    && p.udaljenost_m <= band.maxM && !(band.skipRiver && p.na_rijeci);
+    && p.udaljenost_m >= (band.minM ?? 0) && p.udaljenost_m <= band.maxM && !(band.skipRiver && p.na_rijeci);
 }
 
 // OSM often ends a road at the border and starts it again on the other side a few metres on. Such a

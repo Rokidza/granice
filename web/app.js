@@ -59,6 +59,7 @@ const CATEGORY_STYLE = {
 const FIRST_DATA_LAYER = "staze-par"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
 const SKIP_RIVER_STORAGE_KEY = "granice.bez-rijeke";
+const LEGEND_STORAGE_KEY = "granice.legenda";
 // Camera moves to a chosen place: a steady glide in and out of the zoom, not a fly-out-and-back jump.
 const GLIDE = { linear: true, duration: 1800, essential: true };
 const AREA_PIN_LAYERS = { kopno: "podrucja-kopno", rijeka: "podrucja-rijeka" };
@@ -270,6 +271,13 @@ const hoverSize = ["interpolate", ["linear"], ["zoom"],
 
 const stanjeIs = (value) => ["==", ["get", "stanje"], value];
 
+// The grey over the map beyond the corridor (the `magla` of pojasevi/<m>.json).
+const FOG_COLOR = "#8c8b87";
+const FOG_OPACITY = 0.55;
+const fogData = (choice) => (choice?.magla
+  ? { type: "Feature", geometry: choice.magla, properties: {} }
+  : { type: "FeatureCollection", features: [] });
+
 /** Paint properties that depend on the colour theme, by layer id. */
 function themedPaint(theme) {
   const border = BORDER_COLORS[theme];
@@ -338,6 +346,9 @@ function dataLayers(theme) {
     );
   }
   layers.push(
+    // Grey over everything farther from the border than the corridor: roads there take no part.
+    { id: "pojas-magla", type: "fill", source: "magla",
+      paint: { "fill-color": FOG_COLOR, "fill-opacity": FOG_OPACITY } },
     // Riječna granica: a narrow, pale blue band under the border line.
     { id: "rijecna-granica", type: "line", source: "rijecna_granica",
       layout: { "line-cap": "butt", "line-join": "round" },
@@ -435,6 +446,7 @@ const LAYER_GROUPS = [
   { id: "promet", label: "Promet na prijelazima", hint: "Putnici godišnje po cestovnom prijelazu (DZS), klik daje pojedinosti",
     layers: PROMET_LAYERS },
   { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica"] },
+  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla"] },
   { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
@@ -778,7 +790,7 @@ function roadSample(category, theme) {
 
 function legendRow(visual, text, detail) {
   const row = element("div", undefined, "legend-row");
-  visual.title = detail ? `${text}: ${detail}` : text; // the name on hover over the symbol
+  row.title = detail ? `${text}: ${detail}` : text; // the explanation on hover over the row
   const label = element("span", text, "label");
   if (detail) label.append(element("small", detail));
   row.append(visual, label);
@@ -811,7 +823,7 @@ function renderLegend() {
     legendGroup(
       "Oznake na karti",
       legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak", "Staza presijeca granicu izvan službenog prijelaza. Popis je u izborniku."),
-      legendRow(imageElement(pinCanvas(PINS.kopno), ""), "Kritično područje: blizu granice", `Staze s obje strane granice na najviše ${metres(state.band.maxM)} jedna od druge, bez rijeke između.`),
+      legendRow(imageElement(pinCanvas(PINS.kopno), ""), "Kritično područje: blizu granice", `Staze s obje strane granice ${bandText(state.band)} jedna od druge, bez rijeke između.`),
       legendRow(imageElement(diamondCanvas(PINS.rijeka), ""), "Kritično područje: preko rijeke", "Isto, ali između staza leži vodotok koji treba prijeći."),
       legendRow(imageElement(sluzbeniPrijelazCanvas(), ""), "Službeni prijelaz", "Susjedni segmenti izuzeti su iz procjene."),
     ),
@@ -838,23 +850,124 @@ function renderLegend() {
         `S barem jedne Strane nema staze unutar ${corridorText()} od granice. To nije nizak rizik.`,
       ),
       legendRow(sample((svg) => sampleLine(svg, ink(theme), 1.6, { dash: "5 4", opacity: 0.6 })), "Sporna granica", "Rizik se ne računa."),
+      legendRow(sample((svg) => sampleLine(svg, "#898781", 2.4, { opacity: 0.6 })), "Uz službeni prijelaz", "Dio granice uz službeni prijelaz, izuzet iz procjene."),
+    ),
+    legendGroup(
+      "Odabrano područje",
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, DANGER[theme], 8, { opacity: 0.4 });
+          const { fill, casing } = ROAD_STYLES[theme].cesta;
+          sampleLine(svg, casing, 3.2);
+          sampleLine(svg, fill, 2);
+        }),
+        "Par staza",
+        "Dvije staze, BiH i HR, zbog kojih je područje kritično (crveni obrub).",
+      ),
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, "#ffffff", 7, { opacity: 0.55 });
+          sampleLine(svg, "#2b2a28", 1.6, { dash: "3 2.2" });
+          for (const cx of [4, 30]) {
+            svg.append(svgElement("circle", { cx, cy: 9, r: 3.2, fill: DANGER[theme], stroke: SURFACES[theme], "stroke-width": 1.2 }));
+          }
+        }),
+        "Put pješice",
+        "Najkraća zračna linija od BiH do HR staze, s udaljenošću u crvenoj oznaci.",
+      ),
+      legendRow(
+        sample((svg) => {
+          svg.append(svgElement("rect", { x: 3, y: 3, width: 28, height: 12, rx: 3, fill: DANGER[theme] }));
+          const text = svgElement("text", { x: 17, y: 12.3, "text-anchor": "middle", "font-size": 8, "font-weight": 700, fill: "#fff" });
+          text.textContent = "m";
+          svg.append(text);
+        }),
+        "Udaljenost para",
+        "Zračna udaljenost između dviju staza para.",
+      ),
+      legendRow(
+        sample((svg) => sampleLine(svg, ink(theme), 1.2, { dash: "0.5 2.5" })),
+        "Veza s granicom",
+        "Točkasta crta od dijela granice do para staza kad je par dalje od 300 m.",
+      ),
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, "#141413", 2.6, { opacity: 0.3 });
+          sampleLine(svg, "#ffffff", 1.2, { dash: "3 4", opacity: 0.8 });
+        }),
+        "Mogući put (pri zumu)",
+        "Najkraća veza svakog para staza, vidljiva tek pri većem zumu.",
+      ),
     ),
     legendGroup(
       "Staze",
       legendRow(roadSample("cesta", theme), "Cesta"),
       legendRow(roadSample("makadam", theme), "Makadam / šumski put"),
       legendRow(roadSample("staza", theme), "Staza / puteljak"),
+      legendRow(
+        sample((svg) => {
+          const { fill, casing } = ROAD_STYLES[theme].cesta;
+          sampleLine(svg, casing, 4.8);
+          sampleLine(svg, fill, 3);
+          svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: FOG_COLOR, "fill-opacity": FOG_OPACITY }));
+        }),
+        `Dalje od ${corridorText()} od granice (sivo)`,
+        "Taj dio staza ne ulazi u izračun. Udaljenost se bira u izborniku „Napredno”.",
+      ),
     ),
   );
-  const note = element("p", `U izračun ulaze ceste, makadami i staze, i to samo njihovi dijelovi do ${corridorText()} od granice. Udaljenost para staza je najmanje zbroj njihovih udaljenosti od granice, pa prag iznad ${metres(2 * state.corridorM)} hvata samo parove razmaknute uzduž granice. Odabirom područja u izborniku vidi se par staza koji ga čini kritičnim i put pješice između njih.`, "legend-title");
+  const note = element("p", `U izračun ulaze ceste, makadami i staze, i to samo njihovi dijelovi do ${corridorText()} od granice. Udaljenost para staza je najmanje zbroj njihovih udaljenosti od granice, pa prag iznad ${metres(2 * state.corridorM)} hvata samo parove razmaknute uzduž granice. Odabirom područja u izborniku vidi se par staza koji ga čini kritičnim i put pješice između njih.`, "legend-note");
   legend.append(note);
+}
+
+/** The legend is a drop-down in the map's top-right corner: folded to its button at first, so it
+ * does not cover the map, and opened or folded again by the button, remembered per browser. */
+function setupMapLegend() {
+  const box = $("map-legend");
+  const toggle = $("map-legend-toggle");
+  let open = false;
+  try {
+    const saved = localStorage.getItem(LEGEND_STORAGE_KEY);
+    if (saved !== null) open = saved === "1";
+  } catch { /* storage unavailable: the default applies */ }
+  const show = () => {
+    toggle.setAttribute("aria-expanded", String(open));
+    box.classList.toggle("folded", !open);
+  };
+  toggle.addEventListener("click", () => {
+    open = !open;
+    show();
+    try {
+      localStorage.setItem(LEGEND_STORAGE_KEY, open ? "1" : "0");
+    } catch { /* storage unavailable: the choice just is not remembered */ }
+  });
+  show();
 }
 
 const kilometres = (metres) =>
   metres >= 1000 ? `${number(1).format(metres / 1000)} km` : `${number(0).format(metres)} m`;
 
 const metres = (value) => `${number(0).format(value)} m`;
-const bandText = ({ maxM }) => `do ${metres(maxM)}`;
+const bandText = ({ minM = 0, maxM }) => (minM > 0 ? `od ${number(0).format(minM)} do ${metres(maxM)}` : `do ${metres(maxM)}`);
+
+/** Reads the range from its two sliders. Moving one past the other drags the other along. */
+function readBand(moved) {
+  const min = $("band-min");
+  const max = $("band-max");
+  if (Number(min.value) > Number(max.value)) {
+    if (moved === min) max.value = min.value;
+    else min.value = max.value;
+  }
+  paintBandFill();
+  return { minM: Number(min.value), maxM: Number(max.value) };
+}
+
+/** The part of the track between the two thumbs is coloured. */
+function paintBandFill() {
+  const top = Number($("band-max").max) || 1;
+  $("band-fill").style.left = `${(Number($("band-min").value) / top) * 100}%`;
+  $("band-fill").style.right = `${100 - (Number($("band-max").value) / top) * 100}%`;
+}
 
 /** Croatian plural of a count: 1 područje, 2 područja, 5 područja. */
 const plural = (n, one, few, many) =>
@@ -885,6 +998,7 @@ function applyCorridor(choice) {
   });
   state.corridorM = choice.max_border_distance_m;
   state.map.getSource("segmenti").setData({ type: "FeatureCollection", features: state.segments });
+  state.map.getSource("magla").setData(fogData(choice));
   setBandLimits();
   recomputeAreas();
 }
@@ -927,7 +1041,10 @@ function setupCorridorChoice(available) {
 /** The sliders reach the farthest pair in the data, rounded up to 500 m. */
 function setBandLimits() {
   const farthest = Math.max(0, ...state.segments.map((s) => s.properties.udaljenost_m ?? 0));
-  $("band-max").max = String(Math.max(Math.ceil(farthest / 500) * 500, state.band.maxM));
+  const top = String(Math.max(Math.ceil(farthest / 500) * 500, state.band.maxM));
+  $("band-min").max = top;
+  $("band-max").max = top;
+  paintBandFill();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -992,8 +1109,8 @@ function setupSkipRiver() {
 
 const emptyCollection = () => ({ type: "FeatureCollection", features: [] });
 
-function recomputeAreas() {
-  state.band = { maxM: Number($("band-max").value), skipRiver: state.skipRiver };
+function recomputeAreas(moved) {
+  state.band = { ...readBand(moved), skipRiver: state.skipRiver };
   $("band-value").textContent = bandText(state.band);
   // A pair made of a Staza that crosses the border is that Izravni prelazak, not a Kritično područje.
   const crossingWays = new Set(state.crossings.map((f) => f.properties.staza_id));
@@ -1195,7 +1312,7 @@ function renderAreasSummary(kategorija) {
 }
 
 // What the panel shows: one category at a time, in one list that scrolls, found by search and sorted.
-const view = { category: "izravni", currentId: null };
+const view = { category: "izravni", currentId: null, izravniOpen: false };
 
 
 /** One entry of a list: the place and what matters about it (a distance, a kind of road). The chosen
@@ -1734,7 +1851,10 @@ function showView(name) {
   $("layers-toggle").setAttribute("aria-expanded", String(layers));
   $("band-control").hidden = layers || view.category === "izravni";
   for (const list of document.querySelectorAll(".areas")) list.hidden = list.dataset.cat !== view.category;
-  $("izravni-summary").hidden = view.category !== "izravni";
+  // The Izravni prelasci are a dropdown: the list shows only once its summary is opened.
+  $("izravni").hidden ||= !view.izravniOpen;
+  $("izravni-toggle").hidden = view.category !== "izravni";
+  $("izravni-toggle").setAttribute("aria-expanded", String(view.izravniOpen));
   $("areas-summary-kopno").hidden = view.category !== "kopno";
   $("areas-summary-rijeka").hidden = view.category !== "rijeka";
 }
@@ -1762,6 +1882,10 @@ function setupCards() {
     });
   });
   $("layers-toggle").addEventListener("click", () => showView($("pane-slojevi").hidden ? "slojevi" : view.category));
+  $("izravni-toggle").addEventListener("click", () => {
+    view.izravniOpen = !view.izravniOpen;
+    showView("izravni");
+  });
   showView("izravni");
 }
 
@@ -2077,6 +2201,7 @@ async function start() {
   } catch { /* data from before the corridor choices: the field is disabled */ }
 
   setBandLimits();
+  $("band-min").value = String(state.band.minM ?? 0);
   $("band-max").value = String(state.band.maxM);
   for (const [name, file] of [["segmenti", "segmenti.geojson"], ["staze", "staze.geojson"], ["granica", "granica.geojson"], ["prijelazi", "prijelazi.geojson"]]) {
     const link = element("a", name);
@@ -2105,6 +2230,7 @@ async function start() {
   map.addSource("zona-veze", { type: "geojson", data: empty });
   map.addSource("par-hover", { type: "geojson", data: empty });
   map.addSource("mjerenje", { type: "geojson", data: empty });
+  map.addSource("magla", { type: "geojson", data: fogData(firstCorridor) });
   for (const layer of dataLayers(theme)) map.addLayer(layer);
   map.addSource("ikona-hover", { type: "geojson", data: empty });
   map.addLayer({ id: "ikona-hover", type: "symbol", source: "ikona-hover",
@@ -2117,6 +2243,7 @@ async function start() {
   }
 
   renderToggles();
+  setupMapLegend();
   setupClicks();
   setupHover();
   setupLinkAnimation();
@@ -2139,9 +2266,11 @@ async function start() {
   // The overview shows only from zoom 9 and loads imagery of its own: after the main map is done.
   map.once("idle", () => setupOverview(data.granica, bounds));
 
-  $("band-max").addEventListener("input", () => {
-    if (map.getLayer("podrucja-kopno")) recomputeAreas(); // once the layers are added
-  });
+  for (const id of ["band-min", "band-max"]) {
+    $(id).addEventListener("input", (event) => {
+      if (map.getLayer("podrucja-kopno")) recomputeAreas(event.target); // once the layers are added
+    });
+  }
   darkQuery.addEventListener("change", () => {
     showBasemap(state.basemap); // "Karta" has a style per theme; this applies the palette too
   });

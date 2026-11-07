@@ -45,11 +45,18 @@
       <div class="finder" id="finder">
         <div class="band-control" id="band-control" hidden>
           <p>Najbliži par staza <output id="band-value"></output></p>
-          <input id="band-max" type="range" min="0" step="50" aria-label="Najbliži par staza do (m)">
+          <div class="dual-range" id="band-range">
+            <div class="dual-range-fill" id="band-fill" aria-hidden="true"></div>
+            <input id="band-min" type="range" min="0" step="50" aria-label="Najbliži par staza od (m)">
+            <input id="band-max" type="range" min="0" step="50" aria-label="Najbliži par staza do (m)">
+          </div>
         </div>
         <div class="list-head">
           <div class="list-summary">
-            <p id="izravni-summary" class="summary" aria-live="polite"></p>
+            <button type="button" id="izravni-toggle" class="summary-toggle" aria-expanded="false" aria-controls="izravni">
+              <span id="izravni-summary" class="summary" aria-live="polite"></span>
+              <span class="summary-chevron" aria-hidden="true"></span>
+            </button>
             <p id="areas-summary-kopno" class="summary" aria-live="polite" hidden></p>
             <p id="areas-summary-rijeka" class="summary" aria-live="polite" hidden></p>
           </div>
@@ -89,11 +96,6 @@
         </div>
       </details>
 
-      <details class="panel">
-        <summary><h2>Legenda</h2></summary>
-        <div id="legend"></div>
-      </details>
-
       <footer class="notes">
         <ul>
           <li>Granična linija je informativna (izvor: OpenStreetMap) i nije pravno obvezujuća. Procjena je indikativna i nije validirana terenskim podacima.</li>
@@ -108,7 +110,7 @@
       </div>
 
       <footer class="dock-foot">
-        <button type="button" id="layers-toggle" class="layers-toggle" aria-expanded="false" aria-controls="pane-slojevi"><span>Slojevi, legenda i napomene</span><span aria-hidden="true">›</span></button>
+        <button type="button" id="layers-toggle" class="layers-toggle" aria-expanded="false" aria-controls="pane-slojevi"><span>Slojevi i napomene</span><span aria-hidden="true">›</span></button>
       </footer>
     </aside>
 
@@ -127,6 +129,12 @@
         <p id="measure-hint" class="map-hint" role="status"></p>
         <p id="basemap-status" class="map-status" role="status"></p>
       </div>
+      <section id="map-legend" class="map-legend folded" aria-label="Legenda karte">
+        <button type="button" id="map-legend-toggle" class="map-legend-head" aria-expanded="false" aria-controls="legend">
+          <span>Legenda</span><span class="map-legend-chevron" aria-hidden="true"></span>
+        </button>
+        <div id="legend" class="map-legend-body"></div>
+      </section>
       <div id="overview" class="overview hidden" role="img" title="Povucite crveni okvir ili kliknite da premjestite kartu" aria-label="Pregled cijele granice s trenutnim pogledom"></div>
       <p id="cursor-coords" class="cursor-coords" aria-hidden="true" hidden></p>
       <p id="error" class="error" role="alert" hidden></p>

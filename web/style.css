@@ -90,9 +90,41 @@ ul, ol { list-style: none; }
 .band-control { display: grid; gap: 4px; padding: 8px 0 2px; }
 .band-control p { margin: 0; color: var(--ink-2); font-weight: 600; }
 .band-control output { color: var(--accent); font-weight: 700; }
+/* Two thumbs on one track: the range of the nearest-pair distance */
+.dual-range { position: relative; height: 22px; }
+.dual-range::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%);
+  border-radius: 2px; background: var(--line);
+}
+.dual-range-fill { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 2px; background: var(--accent); }
+.dual-range input[type="range"] {
+  position: absolute; inset: 0; width: 100%; height: 22px; margin: 0; background: none;
+  -webkit-appearance: none; appearance: none; pointer-events: none;
+}
+.dual-range input[type="range"]::-webkit-slider-runnable-track { background: none; border: 0; }
+.dual-range input[type="range"]::-moz-range-track { background: none; border: 0; }
+.dual-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; pointer-events: auto; cursor: pointer;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent);
+}
+.dual-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto; cursor: pointer;
+  width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent);
+}
 .list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
 .list-head .summary { margin: 0; font-size: 12px; }
 .list-head .summary strong { font-size: 13px; }
+/* Izravni prelasci: the summary opens and closes the list */
+.list-summary { flex: 1; min-width: 0; }
+.summary-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 6px 10px;
+  font: inherit; text-align: left; color: inherit; background: var(--raised); border: 1px solid var(--line);
+  border-radius: 10px; cursor: pointer;
+}
+.summary-toggle[hidden] { display: none; }
+.summary-toggle:hover { border-color: var(--ink-2); }
+.summary-chevron::after { content: "▸"; color: var(--muted); }
+.summary-toggle[aria-expanded="true"] .summary-chevron::after { content: "▾"; }
 
 /* The one scroll of the panel */
 .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 4px 14px; }
@@ -225,6 +257,34 @@ button:hover { border-color: var(--ink-2); }
 .sample svg { display: block; }
 .legend-icon { width: 26px; height: 26px; }
 
+.legend-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
+
+/* The legend floating in the map's top-right corner, under the zoom buttons */
+.map-legend {
+  position: absolute; top: 84px; right: 10px; z-index: 3; width: 236px;
+  max-height: calc(100% - 84px - 230px); min-height: 0; display: flex; flex-direction: column;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+}
+.map-legend-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  padding: 8px 12px; border: 0; border-radius: 0; background: none; font: inherit; font-size: 12px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); cursor: pointer;
+}
+.map-legend-head:hover { background: var(--raised); }
+.map-legend-chevron::after { content: "▾"; color: var(--muted); }
+.map-legend.folded .map-legend-chevron::after { content: "▸"; }
+.map-legend-body { overflow-y: auto; padding: 2px 12px 12px; border-top: 1px solid var(--line); }
+.map-legend.folded .map-legend-body { display: none; }
+.map-legend.folded { width: auto; }
+.map-legend.folded .map-legend-head { gap: 14px; }
+.map-legend .legend-group { gap: 4px; margin: 8px 0 0; }
+.map-legend .legend-title { margin: 0 0 1px; font-size: 11px; font-weight: 600; }
+.map-legend .legend-row { grid-template-columns: 40px 1fr; gap: 8px; font-size: 12px; cursor: help; }
+.map-legend .legend-row .label small { display: none; } /* the explanation is the row's hover title */
+.map-legend .legend-icon { width: 22px; height: 22px; }
+main:has(#map.plain) .map-legend { display: none; }
+
 .notes { color: var(--muted); font-size: 11.5px; padding: 0 4px 4px; }
 .notes ul { padding-left: 16px; list-style: disc; }
 .notes li, .notes p { margin: 4px 0; }
@@ -343,6 +403,7 @@ main { position: absolute; inset: 0; }
   .sidebar { width: calc(100% - 24px); top: auto; bottom: 12px; max-height: 55%; }
   .map-tools, .layout.panel-closed .map-tools { left: 12px; top: 56px; }
   .layout:not(.panel-closed) .map-tools { top: 12px; }
+  .map-legend { width: 200px; max-height: calc(100% - 84px - 120px); }
 }
 
 /* Plain arrow instead of MapLibre's hand; the measuring tool still sets its crosshair inline */
