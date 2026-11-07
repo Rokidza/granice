@@ -305,6 +305,9 @@ main { position: absolute; inset: 0; }
 }
 .map-title-icon img { display: block; width: 22px; height: 22px; }
 .map-title-lead { font-weight: 500; color: var(--ink-2); }
+/* The open area or crossing, in capitals after the heading. */
+.map-title-place { text-transform: uppercase; letter-spacing: 0.02em; }
+.map-title-place:not(:empty)::before { content: " · "; }
 main:has(#map.plain) .map-title { display: none; }
 .segmented {
   display: inline-flex; padding: 3px; gap: 2px; background: var(--surface);

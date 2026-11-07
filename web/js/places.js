@@ -1,7 +1,12 @@
 // Names a point on the map: the nearest settlement and the county (županija) or canton it lies in.
-// Asked of OpenStreetMap's Nominatim one place at a time (its policy: at most one request a second)
-// and remembered in this browser, so each place is asked for once.
+// The settlements along the border come with the page (mjesta.json, `python -m granice mjesta`),
+// so a point is named at once. Only without that file, or far from the border, it is asked of
+// OpenStreetMap's Nominatim one place at a time (its policy: at most one request a second) and
+// remembered in this browser, so each place is asked for once.
 
+import CONFIG from "../config.js";
+
+const LOCAL_MAX_KM = 6; // farther from every known settlement, Nominatim is asked
 const ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
 const STORAGE_KEY = "granice.mjesta";
 const SPACING_MS = 1100;
@@ -33,8 +38,39 @@ function describe(address = {}) {
   };
 }
 
+let settlements = null;
+
+/** The settlements of mjesta.json as [lon, lat, naselje, opcina, regija, drzava], or [] without it. */
+function loadSettlements() {
+  settlements ??= fetch(CONFIG.dataDir + "mjesta.json")
+    .then((response) => (response.ok ? response.json() : { mjesta: [] }))
+    .then((data) => data.mjesta ?? [], () => []);
+  return settlements;
+}
+
+/** The nearest settlement within LOCAL_MAX_KM, or null. A flat projection is fine at this range. */
+function nearestSettlement(rows, [lon, lat]) {
+  const kx = Math.cos((lat * Math.PI) / 180);
+  let best = null;
+  let bestD = (LOCAL_MAX_KM / 111.32) ** 2;
+  for (const row of rows) {
+    const dx = (row[0] - lon) * kx;
+    const dy = row[1] - lat;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = row; }
+  }
+  if (!best) return null;
+  const [, , place, municipality, region, country] = best;
+  return { place, municipality, region, country };
+}
+
 /** Where a point is, or null when it cannot be told (offline, service busy). */
-export function placeAt(coordinates) {
+export async function placeAt(coordinates) {
+  const local = nearestSettlement(await loadSettlements(), coordinates);
+  return local ?? askNominatim(coordinates);
+}
+
+function askNominatim(coordinates) {
   const id = key(coordinates);
   if (memory.has(id)) return Promise.resolve(memory.get(id));
   const result = last.then(async () => {

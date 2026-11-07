@@ -14,6 +14,7 @@ cd pipeline
 pip install -e ".[dev]"
 python -m granice refresh          # ponovno preuzimanje Geofabrik izvadaka (oko 360 MB) i izračun
 python -m granice compute          # samo izračun iz već preuzetih podataka (data/raw/)
+python -m granice mjesta           # naselja uz granicu (data/out/mjesta.json): imena područja na popisu, bez čekanja na Nominatim
 
 # 2. web
 cd ../web

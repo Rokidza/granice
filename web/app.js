@@ -327,6 +327,14 @@ function dataLayers(theme) {
       minzoom: 11.5, layout: { "line-cap": "round", "line-join": "round" },
       paint: { ...colors["staze-zona"], "line-width": roadScaled(4.5),
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0, 13.5, 0.45] } },
+    // Grey over everything farther from the border than the corridor: it mutes the yellow there,
+    // while the roads themselves are drawn above it in their own colours.
+    { id: "pojas-magla", type: "fill", source: "magla",
+      paint: { "fill-color": FOG_COLOR, "fill-opacity": FOG_OPACITY } },
+    // Beyond it the grey fades out in rings up to 10 km from the border (magla_rub.geojson).
+    { id: "pojas-magla-rub", type: "fill", source: "magla-rub",
+      // No antialiasing: the soft edges of touching rings would add up to thin visible lines.
+      paint: { "fill-color": FOG_COLOR, "fill-opacity": ["*", FOG_OPACITY, ["get", "udio"]], "fill-antialias": false } },
   ];
   for (const category of CATEGORIES) {
     const style = CATEGORY_STYLE[category];
@@ -354,13 +362,6 @@ function dataLayers(theme) {
     );
   }
   layers.push(
-    // Grey over everything farther from the border than the corridor: roads there take no part.
-    { id: "pojas-magla", type: "fill", source: "magla",
-      paint: { "fill-color": FOG_COLOR, "fill-opacity": FOG_OPACITY } },
-    // Beyond it the grey fades out in rings up to 10 km from the border (magla_rub.geojson).
-    { id: "pojas-magla-rub", type: "fill", source: "magla-rub",
-      // No antialiasing: the soft edges of touching rings would add up to thin visible lines.
-      paint: { "fill-color": FOG_COLOR, "fill-opacity": ["*", FOG_OPACITY, ["get", "udio"]], "fill-antialias": false } },
     // Riječna granica: a narrow, pale blue band under the border line.
     { id: "rijecna-granica", type: "line", source: "rijecna_granica",
       layout: { "line-cap": "butt", "line-join": "round" },
@@ -939,9 +940,9 @@ function renderLegend() {
       legendRow(
         sample((svg) => {
           const { fill, casing } = ROAD_STYLES[theme].cesta;
+          svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: FOG_COLOR, "fill-opacity": FOG_OPACITY }));
           sampleLine(svg, casing, 4.8);
           sampleLine(svg, fill, 3);
-          svg.append(svgElement("rect", { x: 0, y: 0, width: 34, height: 18, fill: FOG_COLOR, "fill-opacity": FOG_OPACITY }));
         }),
         `Dalje od ${corridorText()} od granice (sivo)`,
         "Taj dio staza ne ulazi u izračun. Udaljenost se bira u izborniku „Napredno”.",
@@ -1226,7 +1227,13 @@ function clearSelection() {
   for (const button of document.querySelectorAll(".area-button[aria-current]")) button.removeAttribute("aria-current");
   state.selectedPair = null;
   view.currentId = null;
+  showOpenName("");
   highlightPair();
+}
+
+/** The name of the open area or crossing, in capitals next to the map's heading ("" hides it). */
+function showOpenName(text) {
+  $("map-title-place").textContent = text;
 }
 
 /** Clears the previous choice; for a Kritično područje also shows its pairs of Staze and the links
@@ -1246,6 +1253,7 @@ function markListEntry(id) {
   const button = document.querySelector(`.area-button[data-id="${id}"]`);
   if (!button) return;
   button.setAttribute("aria-current", "true");
+  showOpenName(button.querySelector(".area-place")?.textContent ?? "");
   showView(button.closest("ol")?.dataset.cat);
   button.scrollIntoView({ block: "nearest" });
 }
@@ -1366,13 +1374,13 @@ const view = { category: "izravni", currentId: null, izravniOpen: false };
 
 /** One entry of a list: the place and what matters about it (a distance, a kind of road). The chosen
  * entry opens to show more and two actions. */
-function listRow({ id, cat, value, coordinates, detail, label, open }) {
+function listRow({ id, cat, value, coordinates, detail, label, open, placeholder }) {
   const item = element("li");
   const button = element("button", undefined, `area-button cat-${cat}`);
   button.type = "button";
   button.dataset.id = id;
   button.setAttribute("aria-label", label);
-  const name = element("strong", "Mjesto se učitava…", "area-place loading");
+  const name = element("strong", placeholder, "area-place loading");
   const where = element("small", undefined, "area-sub");
   const text = element("span", undefined, "area-text");
   text.append(name, where);
@@ -1397,6 +1405,7 @@ function listRow({ id, cat, value, coordinates, detail, label, open }) {
   button.placeFill = () => placeAt(coordinates).then((place) => {
     name.textContent = place?.place ?? place?.municipality ?? "Neimenovano mjesto";
     name.classList.remove("loading");
+    if (view.currentId === id) showOpenName(name.textContent);
     where.textContent = place ? [place.place ? place.municipality : null, place.region].filter(Boolean).join(" · ") : "";
   });
   placeObserver?.observe(button);
@@ -1407,15 +1416,15 @@ function listRow({ id, cat, value, coordinates, detail, label, open }) {
 function renderAreaList(kategorija) {
   const list = $(`areas-${kategorija}`);
   list.replaceChildren();
-  for (const area of state.areas[kategorija]) {
+  state.areas[kategorija].forEach((area, i) => {
     const p = closestPairSegment(area).properties;
     list.append(listRow({
-      id: area.id, cat: kategorija, value: metres(p.udaljenost_m), coordinates: areaPoint(area),
+      id: area.id, cat: kategorija, placeholder: `Područje ${i + 1}`, value: metres(p.udaljenost_m), coordinates: areaPoint(area),
       detail: `${kilometres(area.lengthM)} granice`,
       label: `Par staza na ${metres(p.udaljenost_m)}, ${kilometres(area.lengthM)} granice. Prikaži na karti.`,
       open: () => showArea(area, { fly: true }),
     }));
-  }
+  });
 }
 
 function renderAreaLists() {
@@ -1475,15 +1484,15 @@ function renderCrossingList() {
   } else {
     $("izravni-summary").textContent = "Nijedna staza ne presijeca granicu izvan službenog prijelaza.";
   }
-  for (const feature of state.crossings) {
+  state.crossings.forEach((feature, i) => {
     const p = feature.properties;
     list.append(listRow({
-      id: `izravni-${p.segment}`, cat: "izravni", value: capitalized(crossingName(p)),
+      id: `izravni-${p.segment}`, cat: "izravni", placeholder: `Prelazak ${i + 1}`, value: capitalized(crossingName(p)),
       coordinates: feature.geometry.coordinates, detail: "Presijeca granicu izvan službenog prijelaza",
       label: `Izravni prelazak: ${crossingName(p)}. Prikaži na karti.`,
       open: () => showCrossing(feature),
     }));
-  }
+  });
 }
 
 /** The Izravni prelasci from prijelazi.geojson: roads first, then tracks and paths, each in the
