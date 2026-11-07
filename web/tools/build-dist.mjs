@@ -41,7 +41,7 @@ for (const file of VENDOR_FILES) cpSync(join(web, "vendor", file), join(out, "ve
 for (const file of DATA_FILES) cpSync(join(dataOut, file), join(out, "data", file));
 cpSync(join(dataOut, "pojasevi"), join(out, "data", "pojasevi"), { recursive: true });
 // Traffic per crossing, the faded edge of the fog and the settlements; optional, the page leaves them out without them.
-for (const optional of ["promet_prijelaza.geojson", "magla_rub.geojson", "mjesta.json"]) {
+for (const optional of ["promet_prijelaza.geojson", "magla_rub.geojson", "mjesta.json", "zasticena_podrucja.geojson"]) {
   if (existsSync(join(dataOut, optional))) cpSync(join(dataOut, optional), join(out, "data", optional), { recursive: true });
 }
 

@@ -40,7 +40,7 @@ function describe(address = {}) {
 
 let settlements = null;
 
-/** The settlements of mjesta.json as [lon, lat, naselje, opcina, regija, drzava], or [] without it. */
+/** The settlements of mjesta.json as [lon, lat, naselje, opcina, regija, drzava, stanovnika_2011], or [] without it. */
 function loadSettlements() {
   settlements ??= fetch(CONFIG.dataDir + "mjesta.json")
     .then((response) => (response.ok ? response.json() : { mjesta: [] }))
@@ -60,8 +60,8 @@ function nearestSettlement(rows, [lon, lat]) {
     if (d < bestD) { bestD = d; best = row; }
   }
   if (!best) return null;
-  const [, , place, municipality, region, country] = best;
-  return { place, municipality, region, country };
+  const [, , place, municipality, region, country, residents] = best;
+  return { place, municipality, region, country, residents };
 }
 
 /** Where a point is, or null when it cannot be told (offline, service busy). */
@@ -95,7 +95,8 @@ function askNominatim(coordinates) {
 /** "Šamac, Općina Šamac · Posavski kanton · BiH", whatever of it is known. */
 export function placeText(place) {
   if (!place) return "";
-  return [place.place, place.municipality, place.region, place.country].filter(Boolean).join(" · ");
+  const residents = place.residents ? `${place.residents.toLocaleString("hr-HR")} st. (2011.)` : null;
+  return [place.place, place.municipality, place.region, place.country, residents].filter(Boolean).join(" · ");
 }
 
 /** The short form for lists: "Šamac · Posavski kanton". */

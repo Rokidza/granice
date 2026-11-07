@@ -463,6 +463,8 @@ const LAYER_GROUPS = [
   { id: "prijelazi", label: "Službeni prijelazi", hint: "Službeni granični prijelazi", layers: ["prijelazi-sluzbeni"] },
   { id: "promet", label: "Promet na prijelazima", hint: "Putnici godišnje po cestovnom prijelazu (DZS), klik daje pojedinosti",
     layers: PROMET_LAYERS },
+  { id: "zasticena", label: "Zaštićena područja i Natura 2000", hint: "Zaštićena područja RH i ekološka mreža Natura 2000 do 5 km od granice (HAOP, data.gov.hr)",
+    layers: ["zasticena-ispuna", "zasticena-rub"] },
   { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica", "granica-kriticna"] },
   { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub"] },
   { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
@@ -817,6 +819,7 @@ function renderLegend() {
         `S barem jedne Strane nema staze unutar ${corridorText()} od granice. To nije nizak rizik.`,
       ),
       legendRow(sample((svg) => sampleLine(svg, ink(theme), 1.6, { dash: "5 4", opacity: 0.6 })), "Sporna granica", "Rizik se ne računa."),
+      legendRow(sample((svg) => sampleLine(svg, "#2f8f6b", 2.4, { dash: "4 3", opacity: 0.8 })), "Zaštićeno područje / Natura 2000", "Do 5 km od granice (HAOP). Zeleno: Natura 2000, žutozeleno: zaštićeno područje."),
       legendRow(sample((svg) => sampleLine(svg, "#898781", 2.4, { opacity: 0.6 })), "Uz službeni prijelaz", "Dio granice uz službeni prijelaz, izuzet iz procjene."),
     ),
     legendGroup(
@@ -2204,6 +2207,17 @@ async function start() {
   if (state.promet) {
     map.addSource(PROMET_SOURCE, { type: "geojson", data: state.promet });
     for (const layer of prometLayers()) map.addLayer(layer, "prijelazi-sluzbeni");
+  }
+
+  const protectedAreas = await fetch(CONFIG.dataDir + "zasticena_podrucja.geojson").then((r) => (r.ok ? r.json() : null), () => null);
+  if (protectedAreas) {
+    map.addSource("zasticena", { type: "geojson", data: protectedAreas });
+    const colour = ["match", ["get", "vrsta"], "natura2000", "#2f8f6b", "#7aa33a"];
+    const below = map.getLayer("granica-casing") ? "granica-casing" : undefined;
+    map.addLayer({ id: "zasticena-ispuna", type: "fill", source: "zasticena", paint: { "fill-color": colour, "fill-opacity": 0.14 } }, below);
+    map.addLayer({ id: "zasticena-rub", type: "line", source: "zasticena",
+      paint: { "line-color": colour, "line-width": 1, "line-opacity": 0.55, "line-dasharray": [4, 3] } }, below);
+    applyVisibility();
   }
 
   setupMapLegend();

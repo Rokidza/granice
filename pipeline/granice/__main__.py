@@ -202,6 +202,8 @@ def main() -> None:
         _add_parameter_options(command)
     commands.add_parser("promet", help="fetch border traffic per crossing from DZS (PX-Web)")
     commands.add_parser("mjesta", help="settlements along the border from the Geofabrik extracts")
+    commands.add_parser("zasticena", help="protected areas and Natura 2000 near the border (data.gov.hr, WFS)")
+    commands.add_parser("stanovnistvo", help="add census 2011 residents to mjesta.json (DZS)")
     serve = commands.add_parser("serve", help="serve the web page on localhost")
     serve.add_argument("--port", type=int, default=8000)
 
@@ -213,6 +215,14 @@ def main() -> None:
         from granice.promet import write_promet
 
         write_promet(OUT_DIR, RAW_DIR / "dzs")
+    elif args.command == "zasticena":
+        from granice.otvoreni import write_zasticena
+
+        write_zasticena(OUT_DIR, RAW_DIR / "bioportal")
+    elif args.command == "stanovnistvo":
+        from granice.otvoreni import write_stanovnistvo
+
+        write_stanovnistvo(OUT_DIR, RAW_DIR / "dzs")
     elif args.command == "mjesta":
         from granice.mjesta import write_mjesta
 

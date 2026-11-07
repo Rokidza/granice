@@ -15,6 +15,9 @@ pip install -e ".[dev]"
 python -m granice refresh          # ponovno preuzimanje Geofabrik izvadaka (oko 360 MB) i izračun
 python -m granice compute          # samo izračun iz već preuzetih podataka (data/raw/)
 python -m granice mjesta           # naselja uz granicu (data/out/mjesta.json): imena područja na popisu, bez čekanja na Nominatim
+python -m granice stanovnistvo     # broj stanovnika 2011. uz naselja (DZS, data.gov.hr)
+python -m granice zasticena        # zaštićena područja i Natura 2000 uz granicu (HAOP, data.gov.hr)
+python -m granice promet           # promet na prijelazima (DZS)
 
 # 2. web
 cd ../web
