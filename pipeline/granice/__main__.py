@@ -126,6 +126,11 @@ def _params(args: argparse.Namespace) -> Params:
 class _RangeHandler(http.server.SimpleHTTPRequestHandler):
     """Static file handler that also answers single-range requests (PMTiles needs them)."""
 
+    def end_headers(self) -> None:
+        # Revalidate every file, so a browser never runs an old app.js against a new index.html.
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def send_head(self):  # type: ignore[no-untyped-def]
         header = self.headers.get("Range")
         path = self.translate_path(self.path)

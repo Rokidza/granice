@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pyproj import Transformer
-from shapely.geometry import MultiLineString, box, mapping
+from shapely.geometry import MultiLineString, mapping
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, transform
 
@@ -30,8 +30,13 @@ SCHEMA_VERSION = 8
 COORD_DECIMALS = 5  # about 1 m
 
 CHOICES_DIR = "pojasevi"  # one file per precomputed max_border_distance_m
-FOG_MARGIN_M = 100_000  # how far around the border the fog outside the corridor reaches
+# The fog outside the corridor: solid up to FOG_SOLID_M from the border, then fading out in
+# FOG_FADE_STEPS rings until FOG_EXTENT_M, so it frames the border instead of covering the map.
+FOG_SOLID_M = 6_000
+FOG_EXTENT_M = 10_000
+FOG_FADE_STEPS = 8
 FOG_SIMPLIFY_M = 10.0  # the fog is only drawn, so its edge may be this much off
+FOG_FADE_SIMPLIFY_M = 50.0  # the faded rings are far from anything that is measured
 # Properties of a segment that do not depend on max_border_distance_m (kept in segmenti.geojson).
 _FIXED_SEGMENT_KEYS = ("lanac", "red", "duljina_m", "na_rijeci")
 
@@ -78,6 +83,7 @@ def write_layers(
     }
     for name, collection in layers.items():
         _write_json(out_dir / f"{name}.geojson", collection)
+    _write_json(out_dir / "magla_rub.geojson", _fog_fade(prepared))
 
     _write_json(
         out_dir / "meta.json",
@@ -128,12 +134,32 @@ def write_corridor_choices(
 
 
 def _fog(prepared: Prepared, distance_m: float) -> dict[str, Any]:
-    """The area around the border farther than `distance_m` from it, as a GeoJSON geometry."""
-    corridor = border_corridor(prepared.risk_input.border, distance_m)
-    surroundings = box(*corridor.bounds).buffer(FOG_MARGIN_M, join_style="mitre")
-    fog = surroundings.difference(corridor).simplify(FOG_SIMPLIFY_M)
+    """The area farther than `distance_m` from the border and at most FOG_SOLID_M, as a GeoJSON
+    geometry. Beyond it the fog fades out (`_fog_fade`)."""
+    border = prepared.risk_input.border
+    fog = (
+        border_corridor(border, FOG_SOLID_M)
+        .difference(border_corridor(border, distance_m))
+        .simplify(FOG_SIMPLIFY_M)
+    )
     result: dict[str, Any] = _rounded(mapping(transform(prepared.to_wgs84.transform, fog)))
     return result
+
+
+def _fog_fade(prepared: Prepared) -> dict[str, Any]:
+    """Rings from FOG_SOLID_M to FOG_EXTENT_M from the border, each with `udio`, the share of the
+    full fog it is drawn with: from nearly all next to the solid fog to nearly none at the edge.
+    The same for every corridor, so it is written once."""
+    border = prepared.risk_input.border
+    step = (FOG_EXTENT_M - FOG_SOLID_M) / FOG_FADE_STEPS
+    features = []
+    for i in range(FOG_FADE_STEPS):
+        inner = border_corridor(border, FOG_SOLID_M + i * step)
+        outer = border_corridor(border, FOG_SOLID_M + (i + 1) * step)
+        ring = outer.difference(inner).simplify(FOG_FADE_SIMPLIFY_M)
+        share = 1 - (i + 0.5) / FOG_FADE_STEPS
+        features.append(_feature(prepared.to_wgs84, ring, {"udio": round(share * share, 3)}))
+    return _collection(features)
 
 
 def _staze(prepared: Prepared, to_wgs84: Transformer) -> dict[str, Any]:

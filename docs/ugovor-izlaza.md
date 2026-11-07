@@ -76,7 +76,11 @@ Jedna datoteka po vrijednosti iz `meta.json` → `pojasevi_m` (npr. `pojasevi/75
 | `max_border_distance_m` | vrijednost za koju je datoteka izračunata |
 | `broj_segmenata_po_stanju` | brojač po `stanje` |
 | `segmenti` | po jedan objekt za svaki segment, istim redom kao u `segmenti.geojson`: ista svojstva osim `lanac`, `red`, `duljina_m`, `na_rijeci` (ne ovise o vrijednosti), a svojstva s `null` ili `false` su izostavljena |
-| `magla` | GeoJSON geometrija područja dalje od te udaljenosti od granice (pojednostavljena na 10 m); stranica preko nje crta maglu |
+| `magla` | GeoJSON geometrija područja dalje od te udaljenosti od granice, a najviše 6 km od nje (pojednostavljena na 10 m); stranica preko nje crta maglu |
+
+## `magla_rub.geojson`
+
+Rub magle, isti za svaki `pojasevi/<m>.json`: 8 prstenova od 6 do 10 km od granice. Svojstvo `udio` (0–1) je dio pune magle kojim se prsten crta, od skoro cijele uz punu maglu do skoro ništa na 10 km, pa magla postupno nestaje. Pragovi su u `granice/export.py` (`FOG_…`).
 
 ## `rijecna_granica.geojson`
 

@@ -26,9 +26,11 @@ export const ROAD_STYLES = {
 
 // The Granična linija: dash-dot in a reddish orange no road has (roads are white, grey and
 // yellow-brown), drawn over a casing of the opposite lightness.
+// The border is green, and red where it belongs to a Kritično područje within the chosen range of
+// pair distances (`critical`), so the stretches the planner is asking about stand out.
 export const BORDER_COLORS = {
-  light: { line: "#d2430f", casing: "#ffffff" },
-  dark: { line: "#ff5a1f", casing: "#1f0a02" },
+  light: { line: "#1e9e3a", critical: "#e0001b", casing: "#ffffff" },
+  dark: { line: "#2fd158", critical: "#ff1f3a", casing: "#0b1a0e" },
 };
 
 // Kritično područje blizu granice and the highlighted pair of Staze of a chosen area.

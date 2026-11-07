@@ -285,6 +285,7 @@ function themedPaint(theme) {
     background: { "background-color": state.basemap?.background ?? SURFACES[theme] },
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
+    "granica-kriticna": { "line-color": border.critical },
     "staze-par": { "line-color": DANGER[theme] },
     "staze-zona": { "line-color": DANGER[theme] },
     "parovi-tocke": { "circle-color": DANGER[theme], "circle-stroke-color": SURFACES[theme] },
@@ -349,6 +350,9 @@ function dataLayers(theme) {
     // Grey over everything farther from the border than the corridor: roads there take no part.
     { id: "pojas-magla", type: "fill", source: "magla",
       paint: { "fill-color": FOG_COLOR, "fill-opacity": FOG_OPACITY } },
+    // Beyond it the grey fades out in rings up to 10 km from the border (magla_rub.geojson).
+    { id: "pojas-magla-rub", type: "fill", source: "magla-rub",
+      paint: { "fill-color": FOG_COLOR, "fill-opacity": ["*", FOG_OPACITY, ["get", "udio"]] } },
     // Riječna granica: a narrow, pale blue band under the border line.
     { id: "rijecna-granica", type: "line", source: "rijecna_granica",
       layout: { "line-cap": "butt", "line-join": "round" },
@@ -367,7 +371,12 @@ function dataLayers(theme) {
     { id: "granica-casing", type: "line", source: "granica",
       paint: { ...colors["granica-casing"], "line-width": 4.4, "line-opacity": 0.75 } },
     { id: "granica", type: "line", source: "granica",
-      paint: { ...colors.granica, "line-width": 2.4, "line-dasharray": [5, 2, 1.2, 2] } },
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colors.granica, "line-width": 2.8 } },
+    // The segments of every Kritično područje within the chosen range: the border there is red.
+    { id: "granica-kriticna", type: "line", source: "segmenti", filter: NO_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colors["granica-kriticna"], "line-width": 3.6 } },
     { id: "prijelazi-sluzbeni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "sluzbeni_prijelaz"],
       minzoom: 9,
@@ -445,8 +454,8 @@ const LAYER_GROUPS = [
   { id: "prijelazi", label: "Službeni prijelazi", hint: "Službeni granični prijelazi", layers: ["prijelazi-sluzbeni"] },
   { id: "promet", label: "Promet na prijelazima", hint: "Putnici godišnje po cestovnom prijelazu (DZS), klik daje pojedinosti",
     layers: PROMET_LAYERS },
-  { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica"] },
-  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla"] },
+  { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica", "granica-kriticna"] },
+  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub"] },
   { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
@@ -831,15 +840,24 @@ function renderLegend() {
       "Granica",
       legendRow(
         sample((svg) => {
-          sampleLine(svg, BORDER_COLORS[theme].casing, 4, { opacity: 0.5 });
-          sampleLine(svg, BORDER_COLORS[theme].line, 1.6, { dash: "7 3 2 3" });
+          sampleLine(svg, BORDER_COLORS[theme].casing, 4, { opacity: 0.75 });
+          sampleLine(svg, BORDER_COLORS[theme].line, 2.4);
         }),
         "Granična linija",
+        "Zeleno: izvan odabranog raspona.",
+      ),
+      legendRow(
+        sample((svg) => {
+          sampleLine(svg, BORDER_COLORS[theme].casing, 4, { opacity: 0.75 });
+          sampleLine(svg, BORDER_COLORS[theme].critical, 3);
+        }),
+        "Granica u odabranom rasponu",
+        `Crveno: dio granice čije su staze s obje strane ${bandText(state.band)} jedna od druge.`,
       ),
       legendRow(
         sample((svg) => {
           sampleLine(svg, RIVER[theme], 6, { opacity: 0.35 });
-          sampleLine(svg, BORDER_COLORS[theme].line, 1.6, { dash: "7 3 2 3" });
+          sampleLine(svg, BORDER_COLORS[theme].line, 2.4);
         }),
         "Granica na rijeci",
         "Granica teče rijekom ili uz vodu (do 75 m od nje).",
@@ -1141,6 +1159,7 @@ function drawZone(links) {
   const ids = members.map((p) => p.id);
   const hr = new Set(members.map((p) => p.hr_staza_id));
   const bih = new Set(members.map((p) => p.bih_staza_id));
+  map.setFilter("granica-kriticna", ids.length ? ["in", ["get", "id"], ["literal", ids]] : NO_ID);
   map.setFilter("staze-zona", ids.length ? ["any",
     ["all", ["==", ["get", "strana"], "HR"], ["in", ["get", "id"], ["literal", [...hr]]]],
     ["all", ["==", ["get", "strana"], "BiH"], ["in", ["get", "id"], ["literal", [...bih]]]],
@@ -2231,6 +2250,11 @@ async function start() {
   map.addSource("par-hover", { type: "geojson", data: empty });
   map.addSource("mjerenje", { type: "geojson", data: empty });
   map.addSource("magla", { type: "geojson", data: fogData(firstCorridor) });
+  map.addSource("magla-rub", { type: "geojson", data: empty });
+  // Optional: data from before the faded edge just has the solid grey.
+  fetch(CONFIG.dataDir + "magla_rub.geojson")
+    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((rub) => rub && map.getSource("magla-rub").setData(rub));
   for (const layer of dataLayers(theme)) map.addLayer(layer);
   map.addSource("ikona-hover", { type: "geojson", data: empty });
   map.addLayer({ id: "ikona-hover", type: "symbol", source: "ikona-hover",

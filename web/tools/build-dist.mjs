@@ -40,8 +40,8 @@ for (const file of PAGE_FILES) cpSync(join(web, file), join(out, file));
 for (const file of VENDOR_FILES) cpSync(join(web, "vendor", file), join(out, "vendor", file));
 for (const file of DATA_FILES) cpSync(join(dataOut, file), join(out, "data", file));
 cpSync(join(dataOut, "pojasevi"), join(out, "data", "pojasevi"), { recursive: true });
-// Traffic per crossing; optional, the page leaves it out without it.
-for (const optional of ["promet_prijelaza.geojson"]) {
+// Traffic per crossing and the faded edge of the fog; optional, the page leaves them out without them.
+for (const optional of ["promet_prijelaza.geojson", "magla_rub.geojson"]) {
   if (existsSync(join(dataOut, optional))) cpSync(join(dataOut, optional), join(out, "data", optional), { recursive: true });
 }
 
