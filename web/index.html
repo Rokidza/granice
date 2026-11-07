@@ -118,10 +118,6 @@
       <button type="button" id="panel-open" class="tool-button" title="Prikaži panel" hidden>☰ Panel</button>
       <div id="map" role="application" aria-label="Karta Staza i rizika prelaska"></div>
       <div class="map-tools">
-        <h2 id="map-title" class="map-title" aria-live="polite">
-          <span id="map-title-icon" class="map-title-icon" aria-hidden="true"></span>
-          <span><span class="map-title-lead">Prikaz riskantnih područja prelaska:</span> <span id="map-title-what"></span></span>
-        </h2>
         <div class="tool-row">
           <div id="basemap-choice" class="segmented" role="radiogroup" aria-label="Podloga karte"></div>
           <button type="button" id="measure-toggle" class="tool-button" aria-pressed="false" title="Zračna udaljenost između dvije točke">
@@ -129,9 +125,13 @@
             Mjerenje
           </button>
           <button type="button" id="plain-toggle" class="tool-button" aria-pressed="false" title="Samo podloga s nazivima mjesta, bez staza, granice i oznaka">Čista snimka</button>
+          <h2 id="map-title" class="map-title" aria-live="polite">
+            <span id="map-title-icon" class="map-title-icon" aria-hidden="true"></span>
+            <span><span class="map-title-lead">Prikaz riskantnih područja prelaska:</span> <span id="map-title-what"></span></span>
+          </h2>
         </div>
         <div class="risk-key" role="note" aria-label="Boje granice">
-          <span class="risk-chip risk-high">VELIKI RIZIK OD MIGRANATA</span>
+          <button type="button" id="risk-high-open" class="risk-chip risk-high" title="Prikaži prvo kritično područje s popisa">VELIKI RIZIK OD MIGRANATA</button>
           <span class="risk-chip risk-low">MALI RIZIK</span>
         </div>
         <p id="measure-hint" class="map-hint" role="status"></p>

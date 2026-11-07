@@ -713,6 +713,9 @@ function applyVisibility() {
       && (!group.category || group.category === view.category);
     for (const id of group.layers) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
   }
+  // The enlarged copy of the symbol last under the mouse would stay behind when its layer is hidden.
+  hoveredIcon = null;
+  map.getSource("ikona-hover")?.setData({ type: "FeatureCollection", features: [] });
 }
 
 function setupPlainToggle() {
@@ -1185,11 +1188,11 @@ function drawZone(links) {
 }
 
 /** The border is red along the Kritična područja within the chosen range of the category open in
- * the side panel (Blizu granice or Preko rijeke; both for Izravni prelasci), green elsewhere. */
+ * the side panel (Blizu granice or Preko rijeke), green elsewhere; all green for Izravni prelasci. */
 function paintCriticalBorder() {
   const { map, areas } = state;
   if (!map?.getLayer("granica-kriticna") || !areas) return;
-  const categories = AREA_CATEGORIES.includes(view.category) ? [view.category] : AREA_CATEGORIES;
+  const categories = AREA_CATEGORIES.includes(view.category) ? [view.category] : [];
   const ids = categories.flatMap((k) => areas[k].flatMap((a) => a.segments.map((s) => s.properties.id)));
   map.setFilter("granica-kriticna", ids.length ? ["in", ["get", "id"], ["literal", ids]] : NO_ID);
 }
@@ -1921,6 +1924,16 @@ function showView(name) {
   paintCriticalBorder();
 }
 
+/** The red "Veliki rizik" chip opens the first Kritično područje of the category in the side
+ * panel; from Izravni prelasci (where the border has no red) it switches to Blizu granice first. */
+function setupRiskChip() {
+  $("risk-high-open").addEventListener("click", () => {
+    if (!AREA_CATEGORIES.includes(view.category)) showView("kopno");
+    const first = state.areas?.[view.category]?.[0];
+    if (first) showArea(first, { fly: true });
+  });
+}
+
 const glyphImage = (canvas, alt) => {
   const image = new Image();
   image.src = canvas.toDataURL();
@@ -2319,6 +2332,7 @@ async function start() {
   setupCorridorChoice(firstCorridor !== null);
   setupSkipRiver();
   setupCards();
+  setupRiskChip();
   setupPanelToggle();
   state.crossings = crossingsFrom(data.prijelazi);
   renderCrossingList();
