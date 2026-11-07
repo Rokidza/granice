@@ -48,5 +48,5 @@ export default {
   defaultBasemap: "satelit",
   // Default range of the nearest-pair distance in metres: segments within it are grouped into
   // Kritična područja. The planner changes it in the sidebar.
-  band: { minM: 0, maxM: 300 },
+  band: { minM: 500, maxM: 600 },
 };

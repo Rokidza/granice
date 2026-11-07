@@ -10,8 +10,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import shapely
 from pyproj import Transformer
-from shapely.geometry import MultiLineString, mapping
+from shapely.geometry import LineString, MultiLineString, mapping
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, transform
 
@@ -62,7 +64,7 @@ def write_layers(
 
     on_river = river_segments(assessment.segments, river_stretches)
     layers = {
-        "staze": _staze(prepared, to_wgs84),
+        "staze": _staze(prepared, to_wgs84, corridor_choices),
         "granica": _collection(
             _feature(to_wgs84, c, {"lanac": i}) for i, c in enumerate(risk_input.border)
         ),
@@ -162,24 +164,71 @@ def _fog_fade(prepared: Prepared) -> dict[str, Any]:
     return _collection(features)
 
 
-def _staze(prepared: Prepared, to_wgs84: Transformer) -> dict[str, Any]:
+def _staze(
+    prepared: Prepared, to_wgs84: Transformer, corridor_choices: list[float]
+) -> dict[str, Any]:
+    staze = prepared.risk_input.staze
+    pieces = split_by_corridor(
+        [s.geometry for s in staze], prepared.risk_input.border, corridor_choices
+    )
     features = []
-    for staza in prepared.risk_input.staze:
+    for staza, parts in zip(staze, pieces, strict=True):
         tags = prepared.way_tags.get(staza.way_id, {})
-        features.append(
-            _feature(
-                to_wgs84,
-                staza.geometry,
-                {
-                    "id": staza.way_id,
-                    "strana": staza.strana.value,
-                    "kategorija": staza.category,
-                    "naziv": tags.get("name"),
-                    "highway": tags.get("highway"),
-                },
-            )
-        )
+        properties = {
+            "id": staza.way_id,
+            "strana": staza.strana.value,
+            "kategorija": staza.category,
+            "naziv": tags.get("name"),
+            "highway": tags.get("highway"),
+        }
+        for geometry, corridor_m in parts:
+            extra = {} if corridor_m is None else {"pojas_m": corridor_m}
+            features.append(_feature(to_wgs84, geometry, {**properties, **extra}))
     return _collection(features)
+
+
+def split_by_corridor(
+    geometries: list[BaseGeometry], border: list[LineString], corridor_choices: list[float]
+) -> list[list[tuple[BaseGeometry, float | None]]]:
+    """Each line cut where it crosses one of the corridors, as (piece, the narrowest corridor that
+    holds the piece), so the page can mark the roads within the chosen corridor; None beyond the
+    widest one."""
+    result: list[list[tuple[BaseGeometry, float | None]]] = [[] for _ in geometries]
+    remaining: dict[int, BaseGeometry] = dict(enumerate(geometries))
+    for distance_m in sorted(corridor_choices):
+        if not remaining:
+            break
+        corridor = border_corridor(border, distance_m)
+        shapely.prepare(corridor)
+        indices = list(remaining)
+        lines = np.array([remaining[i] for i in indices], dtype=object)
+        whole = shapely.covers(corridor, lines)
+        touching = shapely.intersects(corridor, lines)
+        for i, line, inside, near in zip(indices, lines, whole, touching, strict=True):
+            if inside:
+                result[i].append((line, distance_m))
+                del remaining[i]
+            elif near:
+                piece = _lines_only(line.intersection(corridor))
+                rest = _lines_only(line.difference(corridor))
+                if piece is not None:
+                    result[i].append((piece, distance_m))
+                if rest is None:
+                    del remaining[i]
+                else:
+                    remaining[i] = rest
+    for i, rest in remaining.items():
+        result[i].append((rest, None))
+    return result
+
+
+def _lines_only(geometry: BaseGeometry) -> BaseGeometry | None:
+    """The line parts of an overlay result, merged where they touch; None if there are none."""
+    lines = [g for g in shapely.get_parts(geometry) if isinstance(g, LineString) and g.length > 0]
+    if not lines:
+        return None
+    merged = linemerge(MultiLineString(lines)) if len(lines) > 1 else lines[0]
+    return merged
 
 
 def _segment(prepared: Prepared, segment: SegmentGranice, on_river: bool) -> dict[str, Any]:

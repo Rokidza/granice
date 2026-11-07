@@ -378,14 +378,14 @@ function dataLayers(theme) {
     { id: "segmenti-prijelaz", type: "line", source: "segmenti", filter: stanjeIs("sluzbeni_prijelaz"),
       paint: { ...colors["segmenti-prijelaz"], "line-width": zoomScaled(2), "line-opacity": 0.6 } },
     { id: "granica-casing", type: "line", source: "granica",
-      paint: { ...colors["granica-casing"], "line-width": 4.4, "line-opacity": 0.75 } },
+      paint: { ...colors["granica-casing"], "line-width": 5.28, "line-opacity": 0.75 } },
     { id: "granica", type: "line", source: "granica",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { ...colors.granica, "line-width": 2.8 } },
+      paint: { ...colors.granica, "line-width": 3.36 } },
     // The segments of every Kritično područje within the chosen range: the border there is red.
     { id: "granica-kriticna", type: "line", source: "segmenti", filter: NO_ID,
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { ...colors["granica-kriticna"], "line-width": 3.6 } },
+      paint: { ...colors["granica-kriticna"], "line-width": 4.32 } },
     { id: "prijelazi-sluzbeni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "sluzbeni_prijelaz"],
       minzoom: 9,
@@ -855,16 +855,16 @@ function renderLegend() {
       "Granica",
       legendRow(
         sample((svg) => {
-          sampleLine(svg, BORDER_COLORS[theme].casing, 4, { opacity: 0.75 });
-          sampleLine(svg, BORDER_COLORS[theme].line, 2.4);
+          sampleLine(svg, BORDER_COLORS[theme].casing, 4.8, { opacity: 0.75 });
+          sampleLine(svg, BORDER_COLORS[theme].line, 2.88);
         }),
         "Granična linija",
         "Zeleno: izvan odabranog raspona.",
       ),
       legendRow(
         sample((svg) => {
-          sampleLine(svg, BORDER_COLORS[theme].casing, 4, { opacity: 0.75 });
-          sampleLine(svg, BORDER_COLORS[theme].critical, 3);
+          sampleLine(svg, BORDER_COLORS[theme].casing, 4.8, { opacity: 0.75 });
+          sampleLine(svg, BORDER_COLORS[theme].critical, 3.6);
         }),
         "Granica u odabranom rasponu",
         `Crveno: dio granice čije su staze s obje strane ${bandText(state.band)} jedna od druge.`,
