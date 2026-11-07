@@ -14,7 +14,7 @@ const MIN_ZOOM_STAZA = 9; // footpaths are left out of tiles below this zoom: to
 export function buildTiles(staze, dir) {
   const index = geojsonvt(staze, { maxZoom: MAX_ZOOM, indexMaxZoom: MAX_ZOOM, tolerance: 3, extent: 4096, buffer: 64 });
   const [west, south, east, north] = staze.features.reduce(
-    ([w, s, e, n], { geometry }) => geometry.coordinates.reduce(
+    ([w, s, e, n], { geometry }) => (geometry.type === "MultiLineString" ? geometry.coordinates.flat() : geometry.coordinates).reduce(
       ([w, s, e, n], [lon, lat]) => [Math.min(w, lon), Math.min(s, lat), Math.max(e, lon), Math.max(n, lat)], [w, s, e, n]),
     [Infinity, Infinity, -Infinity, -Infinity],
   );
