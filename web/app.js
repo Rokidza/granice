@@ -84,6 +84,7 @@ const state = {
   stazaById: new Map(), // "<strana>:<OSM way id>" → properties of the Staza, for names of the pairs
   pairSegment: null, // id of the segment whose pair is highlighted (that of the chosen area)
   selectedPair: null, // the segment of the chosen Kritično područje whose pair stays highlighted
+  selectedArea: null, // the chosen Kritično područje, whose Staze are drawn soft red
   pairLabels: [], // markers naming the two roads and the gap of the highlighted pair
   plain: false, // only the basemap is shown, none of our layers
   hasLocalBasemap: false,
@@ -288,6 +289,7 @@ function themedPaint(theme) {
     "staze-izracun": { "line-color": IZRACUN[theme] },
     "staze-par": { "line-color": DANGER[theme] },
     "staze-zona": { "line-color": DANGER[theme] },
+    "staze-podrucje": { "line-color": DANGER[theme] },
     "parovi-tocke": { "circle-color": DANGER[theme], "circle-stroke-color": SURFACES[theme] },
     "par-veza": { "line-color": ink(theme) },
     "segmenti-nedovoljno": { "line-color": ink(theme) },
@@ -361,6 +363,11 @@ function dataLayers(theme) {
     );
   }
   layers.push(
+    // Every Staza of the pairs of the chosen Kritično područje, a soft red over the roads, so the
+    // ways that enter the calculation for that area show at any zoom.
+    { id: "staze-podrucje", type: "line", ...staze, filter: NO_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colors["staze-podrucje"], "line-width": roadScaled(5), "line-opacity": 0.5 } },
     // Riječna granica: a narrow, pale blue band under the border line.
     { id: "rijecna-granica", type: "line", source: "rijecna_granica",
       layout: { "line-cap": "butt", "line-join": "round" },
@@ -453,7 +460,7 @@ const LAYER_GROUPS = [
     layers: ["staze-zona", "zona-veze-casing", "zona-veze", "zona-veze-tocke"] },
   { id: "odabir", label: "Odabrano područje", hint: "Najbliži par staza i pješački prijelaz odabranog područja",
     layers: [
-      "staze-par", "par-odabir", "parovi-casing", "parovi-linija",
+      "staze-par", "staze-podrucje", "par-odabir", "parovi-casing", "parovi-linija",
       "parovi-tocke", "par-veza",
     ],
     onChange: (visible) => $("map").classList.toggle("hide-pair-labels", !visible) },
@@ -1102,6 +1109,7 @@ function clearSelection() {
   map.getSource("parovi").setData(emptyCollection());
   for (const button of document.querySelectorAll(".area-button[aria-current]")) button.removeAttribute("aria-current");
   state.selectedPair = null;
+  state.selectedArea = null;
   view.currentId = null;
   showOpenName("");
   highlightPair();
@@ -1118,6 +1126,7 @@ function select({ area = null }) {
   clearSelection();
   if (!area) return;
   state.selectedPair = closestPairSegment(area);
+  state.selectedArea = area;
   state.map.getSource("parovi").setData(linksData(crossingLinks(area.segments, state.band)));
   highlightPair();
 }
@@ -1220,6 +1229,17 @@ function highlightPair() {
     ["all", ["==", ["get", "strana"], "HR"], ["==", ["get", "id"], p.hr_staza_id]],
     ["all", ["==", ["get", "strana"], "BiH"], ["==", ["get", "id"], p.bih_staza_id]],
   ]);
+  // All Staze of the chosen area's pairs, only their parts within the corridor (as in the calculation).
+  const members = state.selectedArea?.segments.map((s) => s.properties) ?? [];
+  const hr = [...new Set(members.map((q) => q.hr_staza_id).filter((v) => v != null))];
+  const bih = [...new Set(members.map((q) => q.bih_staza_id).filter((v) => v != null))];
+  map.setFilter("staze-podrucje", hr.length || bih.length ? ["all",
+    ["<=", ["coalesce", ["get", "pojas_m"], 0], state.corridorM ?? 500],
+    ["any",
+      ["all", ["==", ["get", "strana"], "HR"], ["in", ["get", "id"], ["literal", hr]]],
+      ["all", ["==", ["get", "strana"], "BiH"], ["in", ["get", "id"], ["literal", bih]]],
+    ],
+  ] : NO_ID);
 }
 
 /** The segment of an area with the closest pair: the pair named in the list and kept highlighted. */
