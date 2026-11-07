@@ -5,7 +5,6 @@ import CONFIG from "./config.js";
 import {
   BORDER_COLORS,
   DANGER,
-  IZRACUN,
   PINS,
   RIVER,
   ROAD_STYLES,
@@ -57,7 +56,7 @@ const CATEGORY_STYLE = {
   makadam: { width: 1.4, casing: 1, casingOpacity: 0.5, opacity: 0.75, dash: null },
   staza: { width: 1.1, casing: 0.8, casingOpacity: 0.4, opacity: 0.65, dash: [2.2, 1.6] },
 };
-const FIRST_DATA_LAYER = "staze-izracun"; // basemap layers go below this one
+const FIRST_DATA_LAYER = "staze-par"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
 const LEGEND_STORAGE_KEY = "granice.legenda";
 // Camera moves to a chosen place: a steady glide in and out of the zoom, not a fly-out-and-back jump.
@@ -166,11 +165,12 @@ function sluzbeniPrijelazCanvas() {
   });
 }
 
-function izravniPrelazakCanvas() {
+/** Izravni prelazak over a road: a black triangle. Over a track or path (`path`): a white one. */
+function izravniPrelazakCanvas({ path = false } = {}) {
   return drawn(ICON_PX, (g) => {
     g.scale(ICON_PX / 48, ICON_PX / 48);
-    g.fillStyle = "#0b0b0b";
-    g.strokeStyle = "#ffffff";
+    g.fillStyle = path ? "#ffffff" : "#0b0b0b";
+    g.strokeStyle = path ? "#0b0b0b" : "#ffffff";
     g.lineWidth = 3;
     g.lineJoin = "round";
     g.beginPath();
@@ -180,7 +180,7 @@ function izravniPrelazakCanvas() {
     g.closePath();
     g.fill();
     g.stroke();
-    g.fillStyle = "#ffffff"; // exclamation mark
+    g.fillStyle = path ? "#0b0b0b" : "#ffffff"; // exclamation mark
     g.fillRect(22, 16, 4, 14);
     g.fillRect(22, 33, 4, 4);
   });
@@ -286,7 +286,6 @@ function themedPaint(theme) {
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
     "granica-kriticna": { "line-color": border.critical },
-    "staze-izracun": { "line-color": IZRACUN[theme] },
     "staze-par": { "line-color": DANGER[theme] },
     "staze-zona": { "line-color": DANGER[theme] },
     "staze-podrucje": { "line-color": DANGER[theme] },
@@ -312,12 +311,6 @@ function dataLayers(theme) {
   const staze = { source: "staze", ...(CONFIG.stazeTiles ? { "source-layer": "staze" } : {}) };
   const colors = themedPaint(theme);
   const layers = [
-    // A thin yellow edge under the parts of the roads that enter the calculation: only the pieces
-    // up to the corridor from the border (staze.geojson cuts each Staza into 50 m bands, pojas_m).
-    { id: "staze-izracun", type: "line", ...staze,
-      filter: ["<=", ["coalesce", ["get", "pojas_m"], 0], state.corridorM ?? 500],
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { ...colors["staze-izracun"], "line-width": roadScaled(4.4), "line-opacity": 0.9 } }, // just wider than a road with its outline (3.2)
     // The two Staze of the pair of the chosen Kritično područje, a soft red under the roads.
     { id: "staze-par", type: "line", ...staze, filter: NO_ID,
       layout: { "line-cap": "round", "line-join": "round" },
@@ -328,8 +321,8 @@ function dataLayers(theme) {
       minzoom: 11.5, layout: { "line-cap": "round", "line-join": "round" },
       paint: { ...colors["staze-zona"], "line-width": roadScaled(4.5),
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0, 13.5, 0.45] } },
-    // Grey over everything farther from the border than the corridor: it mutes the yellow there,
-    // while the roads themselves are drawn above it in their own colours.
+    // Grey over everything farther from the border than the corridor: the roads themselves are
+    // drawn above it in their own colours.
     { id: "pojas-magla", type: "fill", source: "magla",
       paint: { "fill-color": FOG_COLOR, "fill-opacity": FOG_OPACITY } },
     // Beyond it the grey fades out in rings up to 10 km from the border (magla_rub.geojson).
@@ -400,7 +393,8 @@ function dataLayers(theme) {
     // Izravni prelasci: like the pins, left out where they would overlap (the pins are placed first).
     { id: "prijelazi-izravni", type: "symbol", source: "prijelazi",
       filter: ["==", ["get", "tip"], "izravni_prelazak"],
-      layout: { "icon-image": "ikona-izravni", "icon-size": PIN_SIZE } },
+      layout: { "icon-size": PIN_SIZE,
+        "icon-image": ["case", ["==", ["get", "kategorija"], "cesta"], "ikona-izravni", "ikona-izravni-staza"] } },
     // One pin per Kritično područje, on the border in the middle of it. Pins that would overlap
     // are left out, the longer area first, so zoomed out only the largest are shown.
     ...["kopno", "rijeka"].map((kategorija) => ({
@@ -470,7 +464,7 @@ const LAYER_GROUPS = [
   { id: "promet", label: "Promet na prijelazima", hint: "Putnici godišnje po cestovnom prijelazu (DZS), klik daje pojedinosti",
     layers: PROMET_LAYERS },
   { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica", "granica-kriticna"] },
-  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub", "staze-izracun"] },
+  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub"] },
   { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
@@ -785,7 +779,8 @@ function renderLegend() {
   legend.append(
     legendGroup(
       "Oznake na karti",
-      legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak", "Staza presijeca granicu izvan službenog prijelaza. Popis je u izborniku."),
+      legendRow(imageElement(izravniPrelazakCanvas(), ""), "Izravni prelazak: cesta", "Cesta presijeca granicu izvan službenog prijelaza. Popis je u izborniku."),
+      legendRow(imageElement(izravniPrelazakCanvas({ path: true }), ""), "Izravni prelazak: staza ili puteljak", "Makadam, šumski put ili staza presijeca granicu izvan službenog prijelaza."),
       legendRow(imageElement(pinCanvas(PINS.kopno), ""), "Kritično područje: blizu granice", `Staze s obje strane granice ${bandText(state.band)} jedna od druge, bez rijeke između.`),
       legendRow(imageElement(diamondCanvas(PINS.rijeka), ""), "Kritično područje: preko rijeke", "Isto, ali između staza leži vodotok koji treba prijeći."),
       legendRow(imageElement(sluzbeniPrijelazCanvas(), ""), "Službeni prijelaz", "Susjedni segmenti izuzeti su iz procjene."),
@@ -889,22 +884,7 @@ function renderLegend() {
     ),
   );
   const note = element("p", `U izračun ulaze ceste, makadami i staze, i to samo njihovi dijelovi do ${corridorText()} od granice. Udaljenost para staza je najmanje zbroj njihovih udaljenosti od granice, pa prag iznad ${metres(2 * state.corridorM)} hvata samo parove razmaknute uzduž granice. Odabirom područja u izborniku vidi se par staza koji ga čini kritičnim i put pješice između njih.`, "legend-note");
-  legend.append(
-    note,
-    legendGroup(
-      null,
-      legendRow(
-        sample((svg) => {
-          const { fill, casing } = ROAD_STYLES[theme].cesta;
-          sampleLine(svg, IZRACUN[theme], 4.4, { opacity: 0.9 });
-          sampleLine(svg, casing, 3.2);
-          sampleLine(svg, fill, 2);
-        }),
-        "Ova cesta ulazi u izračun",
-        `Tanki žuti rub: dio puta do ${corridorText()} od granice.`,
-      ),
-    ),
-  );
+  legend.append(note);
 }
 
 /** The legend is a drop-down in the map's top-right corner: folded to its button at first, so it
@@ -1503,7 +1483,7 @@ function crossingPopup(feature, { compact = false } = {}) {
   const p = feature.properties;
   const root = element("div", undefined, "popup why");
   root.append(
-    element("strong", "Izravni prelazak"),
+    element("strong", p.kategorija === "cesta" ? "Izravni prelazak preko ceste" : "Izravni prelazak preko staze"),
     element("p", capitalized(crossingName(p)), "muted"),
   );
   if (compact) return root;
@@ -1606,7 +1586,8 @@ function setHoverIcon(hit, near) {
   for (const [layer, icon] of Object.entries(HOVER_ICONS)) {
     const feature = map_hit(hit, near, layer);
     if (feature) {
-      found = { icon, feature };
+      const onPath = icon.image === "ikona-izravni" && feature.properties?.kategorija !== "cesta";
+      found = { icon: onPath ? { ...icon, image: "ikona-izravni-staza" } : icon, feature };
       break;
     }
   }
@@ -2193,6 +2174,7 @@ async function start() {
   map.addImage("pin-rijeka", imageData(diamondCanvas(PINS.rijeka)), { pixelRatio: 2 });
   map.addImage("ikona-prijelaz", imageData(sluzbeniPrijelazCanvas()), { pixelRatio: 2 });
   map.addImage("ikona-izravni", imageData(izravniPrelazakCanvas()), { pixelRatio: 2 });
+  map.addImage("ikona-izravni-staza", imageData(izravniPrelazakCanvas({ path: true })), { pixelRatio: 2 });
   const empty = { type: "FeatureCollection", features: [] };
   // The Staze are the big layer: the map's worker fetches and tiles it from the URL, off the page's thread.
   map.addSource("staze", CONFIG.stazeTiles
