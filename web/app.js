@@ -5,6 +5,7 @@ import CONFIG from "./config.js";
 import {
   BORDER_COLORS,
   DANGER,
+  IZRACUN,
   PINS,
   RIVER,
   ROAD_STYLES,
@@ -56,7 +57,7 @@ const CATEGORY_STYLE = {
   makadam: { width: 1.4, casing: 1, casingOpacity: 0.5, opacity: 0.75, dash: null },
   staza: { width: 1.1, casing: 0.8, casingOpacity: 0.4, opacity: 0.65, dash: [2.2, 1.6] },
 };
-const FIRST_DATA_LAYER = "staze-par"; // basemap layers go below this one
+const FIRST_DATA_LAYER = "staze-izracun"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
 const SKIP_RIVER_STORAGE_KEY = "granice.bez-rijeke";
 const LEGEND_STORAGE_KEY = "granice.legenda";
@@ -286,6 +287,7 @@ function themedPaint(theme) {
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
     "granica-kriticna": { "line-color": border.critical },
+    "staze-izracun": { "line-color": IZRACUN[theme] },
     "staze-par": { "line-color": DANGER[theme] },
     "staze-zona": { "line-color": DANGER[theme] },
     "parovi-tocke": { "circle-color": DANGER[theme], "circle-stroke-color": SURFACES[theme] },
@@ -310,6 +312,11 @@ function dataLayers(theme) {
   const staze = { source: "staze", ...(CONFIG.stazeTiles ? { "source-layer": "staze" } : {}) };
   const colors = themedPaint(theme);
   const layers = [
+    // Soft yellow under every road: the grey over it mutes it beyond the corridor, so the roads
+    // that enter the calculation are the clearly yellow ones.
+    { id: "staze-izracun", type: "line", ...staze,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colors["staze-izracun"], "line-width": roadScaled(7), "line-opacity": 0.6 } },
     // The two Staze of the pair of the chosen Kritično područje, a soft red under the roads.
     { id: "staze-par", type: "line", ...staze, filter: NO_ID,
       layout: { "line-cap": "round", "line-join": "round" },
@@ -352,7 +359,8 @@ function dataLayers(theme) {
       paint: { "fill-color": FOG_COLOR, "fill-opacity": FOG_OPACITY } },
     // Beyond it the grey fades out in rings up to 10 km from the border (magla_rub.geojson).
     { id: "pojas-magla-rub", type: "fill", source: "magla-rub",
-      paint: { "fill-color": FOG_COLOR, "fill-opacity": ["*", FOG_OPACITY, ["get", "udio"]] } },
+      // No antialiasing: the soft edges of touching rings would add up to thin visible lines.
+      paint: { "fill-color": FOG_COLOR, "fill-opacity": ["*", FOG_OPACITY, ["get", "udio"]], "fill-antialias": false } },
     // Riječna granica: a narrow, pale blue band under the border line.
     { id: "rijecna-granica", type: "line", source: "rijecna_granica",
       layout: { "line-cap": "butt", "line-join": "round" },
@@ -438,9 +446,9 @@ function dataLayers(theme) {
 
 // `label` is the chip text, `hint` the tooltip.
 const LAYER_GROUPS = [
-  { id: "izravni", label: "Izravni prelasci", hint: "Staze koje presijecaju granicu izvan službenog prijelaza", layers: ["prijelazi-izravni"] },
-  { id: "kopno", label: "Blizu granice", hint: "Kritična područja: putovi s obje strane granice blizu su jedan drugome", layers: ["podrucja-kopno"] },
-  { id: "preko-rijeke", label: "Preko rijeke", hint: "Kritična područja gdje se mora prijeći rijeku", layers: ["podrucja-rijeka"] },
+  { id: "izravni", category: "izravni", label: "Izravni prelasci", hint: "Staze koje presijecaju granicu izvan službenog prijelaza", layers: ["prijelazi-izravni"] },
+  { id: "kopno", category: "kopno", label: "Blizu granice", hint: "Kritična područja: putovi s obje strane granice blizu su jedan drugome", layers: ["podrucja-kopno"] },
+  { id: "preko-rijeke", category: "rijeka", label: "Preko rijeke", hint: "Kritična područja gdje se mora prijeći rijeku", layers: ["podrucja-rijeka"] },
   { id: "zona", label: "Zona područja", hint: "Putovi najbližih parova, vidljivi tek pri većem zumu",
     layers: ["staze-zona", "zona-veze-casing", "zona-veze", "zona-veze-tocke"] },
   { id: "odabir", label: "Odabrano područje", hint: "Najbliži par staza i pješački prijelaz odabranog područja",
@@ -455,7 +463,7 @@ const LAYER_GROUPS = [
   { id: "promet", label: "Promet na prijelazima", hint: "Putnici godišnje po cestovnom prijelazu (DZS), klik daje pojedinosti",
     layers: PROMET_LAYERS },
   { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica", "granica-kriticna"] },
-  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub"] },
+  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub", "staze-izracun"] },
   { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
@@ -695,11 +703,14 @@ function setGroupVisible(group, visible) {
 }
 
 /** Shows the layers of every group that is on, and none while the plain imagery is chosen
- * ("Čista snimka": the basemap alone, with its place names). */
+ * ("Čista snimka": the basemap alone, with its place names). Of the three kinds of places only the
+ * one chosen in the side panel is on the map. */
 function applyVisibility() {
   const { map } = state;
+  if (!map) return;
   for (const group of LAYER_GROUPS) {
-    const visible = !state.plain && !hiddenGroups.has(group.id);
+    const visible = !state.plain && !hiddenGroups.has(group.id)
+      && (!group.category || group.category === view.category);
     for (const id of group.layers) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
   }
 }
@@ -935,7 +946,13 @@ function renderLegend() {
     ),
   );
   const note = element("p", `U izračun ulaze ceste, makadami i staze, i to samo njihovi dijelovi do ${corridorText()} od granice. Udaljenost para staza je najmanje zbroj njihovih udaljenosti od granice, pa prag iznad ${metres(2 * state.corridorM)} hvata samo parove razmaknute uzduž granice. Odabirom područja u izborniku vidi se par staza koji ga čini kritičnim i put pješice između njih.`, "legend-note");
-  legend.append(note);
+  legend.append(
+    note,
+    legendGroup(
+      null,
+      legendRow(sample((svg) => sampleLine(svg, IZRACUN[theme], 6, { opacity: 0.8 })), "Ova cesta ulazi u izračun"),
+    ),
+  );
 }
 
 /** The legend is a drop-down in the map's top-right corner: folded to its button at first, so it
@@ -1159,12 +1176,22 @@ function drawZone(links) {
   const ids = members.map((p) => p.id);
   const hr = new Set(members.map((p) => p.hr_staza_id));
   const bih = new Set(members.map((p) => p.bih_staza_id));
-  map.setFilter("granica-kriticna", ids.length ? ["in", ["get", "id"], ["literal", ids]] : NO_ID);
+  paintCriticalBorder();
   map.setFilter("staze-zona", ids.length ? ["any",
     ["all", ["==", ["get", "strana"], "HR"], ["in", ["get", "id"], ["literal", [...hr]]]],
     ["all", ["==", ["get", "strana"], "BiH"], ["in", ["get", "id"], ["literal", [...bih]]]],
   ] : NO_ID);
   map.getSource("zona-veze").setData(linksData(links));
+}
+
+/** The border is red along the Kritična područja within the chosen range of the category open in
+ * the side panel (Blizu granice or Preko rijeke; both for Izravni prelasci), green elsewhere. */
+function paintCriticalBorder() {
+  const { map, areas } = state;
+  if (!map?.getLayer("granica-kriticna") || !areas) return;
+  const categories = AREA_CATEGORIES.includes(view.category) ? [view.category] : AREA_CATEGORIES;
+  const ids = categories.flatMap((k) => areas[k].flatMap((a) => a.segments.map((s) => s.properties.id)));
+  map.setFilter("granica-kriticna", ids.length ? ["in", ["get", "id"], ["literal", ids]] : NO_ID);
 }
 
 /** One pin per Kritično područje, on the border in the middle of it. */
@@ -1855,6 +1882,19 @@ function setupOverview(granica, bounds) {
   box.addEventListener("pointercancel", release);
 }
 
+// The heading over the map: which kind of place its symbols show.
+const MAP_TITLES = {
+  izravni: "staze koje izravno presijecaju granicu",
+  kopno: "putovi s obje strane blizu granice",
+  rijeka: "prelasci preko rijeke",
+};
+
+function updateMapTitle() {
+  const icon = $(`icon-${view.category}`)?.firstElementChild;
+  $("map-title-icon").replaceChildren(...(icon ? [icon.cloneNode()] : []));
+  $("map-title-what").textContent = MAP_TITLES[view.category] ?? "";
+}
+
 /** Shows one of the three categories (Izravni prelazi, Blizu granice, Preko rijeke) or the layers. */
 function showView(name) {
   if (!name) return;
@@ -1876,6 +1916,9 @@ function showView(name) {
   $("izravni-toggle").setAttribute("aria-expanded", String(view.izravniOpen));
   $("areas-summary-kopno").hidden = view.category !== "kopno";
   $("areas-summary-rijeka").hidden = view.category !== "rijeka";
+  updateMapTitle();
+  applyVisibility();
+  paintCriticalBorder();
 }
 
 const glyphImage = (canvas, alt) => {

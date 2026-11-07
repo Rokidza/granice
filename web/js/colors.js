@@ -24,6 +24,10 @@ export const ROAD_STYLES = {
   },
 };
 
+// Roads within the corridor (outside the grey), the ones that enter the calculation: a soft yellow
+// glow under them, drawn below the grey so beyond the corridor it is muted.
+export const IZRACUN = { light: "#ffe66b", dark: "#f2d94e" };
+
 // The Granična linija: dash-dot in a reddish orange no road has (roads are white, grey and
 // yellow-brown), drawn over a casing of the opposite lightness.
 // The border is green, and red where it belongs to a Kritično područje within the chosen range of
