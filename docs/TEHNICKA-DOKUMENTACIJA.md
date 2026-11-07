@@ -5,11 +5,11 @@ Rješenje za Datathon Portala otvorenih podataka (MPUDT).
 | | |
 |---|---|
 | **Naziv** | Granice |
-| **Tim / mentor** | **[POPUNI]** |
-| **Izazov** | **[POPUNI]** |
-| **Aplikacija (demo)** | **[POPUNI: Netlify adresa]** |
+| **Tim** | **Šibenik** |
+| **Izazov** | **Datathon** |
+| **Aplikacija (demo)** | **https://granica.netlify.app/** |
 | **Izvorni kod** | <https://github.com/Rokidza/granice> |
-| **Video prezentacija** | **[POPUNI]** |
+
 
 ---
 
