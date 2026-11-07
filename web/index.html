@@ -28,10 +28,6 @@
       </header>
 
       <nav class="cards" role="tablist" aria-label="Vrsta mjesta">
-        <button type="button" role="tab" id="tab-izravni" data-tab="izravni" class="card cat-izravni" aria-selected="true" aria-controls="pane-lista">
-          <span class="card-top"><span class="card-icon" id="icon-izravni" aria-hidden="true"></span><span class="card-count" id="izravni-count">0</span></span>
-          <span class="card-label">Izravni prelazi</span>
-        </button>
         <button type="button" role="tab" id="tab-kopno" data-tab="kopno" class="card cat-kopno" aria-selected="false" tabindex="-1" aria-controls="pane-lista">
           <span class="card-top"><span class="card-icon" id="icon-kopno" aria-hidden="true"></span><span class="card-count" id="areas-count-kopno">0</span></span>
           <span class="card-label">Blizu granice</span>
@@ -39,6 +35,10 @@
         <button type="button" role="tab" id="tab-rijeka" data-tab="rijeka" class="card cat-rijeka" aria-selected="false" tabindex="-1" aria-controls="pane-lista">
           <span class="card-top"><span class="card-icon" id="icon-rijeka" aria-hidden="true"></span><span class="card-count" id="areas-count-rijeka">0</span></span>
           <span class="card-label">Preko rijeke</span>
+        </button>
+        <button type="button" role="tab" id="tab-izravni" data-tab="izravni" class="card cat-izravni" aria-selected="true" aria-controls="pane-lista">
+          <span class="card-top"><span class="card-icon" id="icon-izravni" aria-hidden="true"></span><span class="card-count" id="izravni-count">0</span></span>
+          <span class="card-label">Izravni prelazi</span>
         </button>
       </nav>
 
@@ -70,48 +70,8 @@
           <ol id="areas-rijeka" class="areas" data-cat="rijeka" aria-label="Područja gdje treba prijeći rijeku, klik zumira na kartu" hidden></ol>
         </div>
 
-        <div class="pane" id="pane-slojevi" data-pane="slojevi" hidden>
-      <section class="panel" aria-labelledby="h-layers">
-        <div class="panel-head">
-          <h2 id="h-layers">Slojevi</h2>
-          <div id="layer-presets" class="presets" role="group" aria-label="Brzi prikazi"></div>
-        </div>
-        <div class="chips" id="layer-toggles" role="group" aria-label="Slojevi na karti"></div>
-      </section>
-
-      <details class="panel">
-        <summary><h2>Napredno</h2></summary>
-        <div class="controls">
-          <label class="inline" for="corridor">Putovi do
-            <select id="corridor" aria-describedby="corridor-status"></select> od granice
-          </label>
-          <p id="corridor-status" class="corridor-status" role="status"></p>
-          <button type="button" id="skip-river" class="small-toggle" aria-pressed="false" aria-describedby="skip-river-detail">
-            <span class="small-toggle-switch" aria-hidden="true"></span>
-            <span class="small-toggle-text">
-              <strong>Izostavi granicu uz rijeku</strong>
-              <small id="skip-river-detail"></small>
-            </span>
-          </button>
-        </div>
-      </details>
-
-      <footer class="notes">
-        <ul>
-          <li>Granična linija je informativna (izvor: OpenStreetMap) i nije pravno obvezujuća. Procjena je indikativna i nije validirana terenskim podacima.</li>
-          <li>Izračun uključuje ceste, makadame i staze iz OSM-a, bez podataka o osobama, incidentima ili patrolama.</li>
-          <li>OSM je u BiH slabije mapiran: „Nedovoljno podataka” nije isto što i nizak rizik.</li>
-          <li>Podloge se dohvaćaju s vanjskih poslužitelja (OpenFreeMap, OpenTopoMap, Esri).</li>
-        </ul>
-        <p id="osm-date"></p>
-        <p>© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>. Izračunati slojevi objavljeni su pod licencom <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL</a>: <span id="data-links"></span></p>
-      </footer>
-        </div>
       </div>
 
-      <footer class="dock-foot">
-        <button type="button" id="layers-toggle" class="layers-toggle" aria-expanded="false" aria-controls="pane-slojevi"><span>Slojevi i napomene</span><span aria-hidden="true">›</span></button>
-      </footer>
     </aside>
 
     <main>

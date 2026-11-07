@@ -129,13 +129,6 @@ ul, ol { list-style: none; }
 /* The one scroll of the panel */
 .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 4px 14px; }
 .pane[hidden] { display: none; }
-#pane-slojevi { padding-right: 6px; }
-.dock-foot { padding: 0 14px 10px; border-top: 1px solid var(--line); }
-.layers-toggle {
-  display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 6px; padding: 6px 4px;
-  background: transparent; border: 0; color: var(--ink); font-weight: 600; font-size: 12.5px;
-}
-.layers-toggle[aria-expanded="true"] span:last-child { transform: rotate(180deg); }
 .brand { padding: 2px 4px 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .brand h1 { font-size: 19px; letter-spacing: -.01em; }
 .brand p { color: var(--ink-2); font-size: 12px; }
@@ -147,13 +140,7 @@ ul, ol { list-style: none; }
   display: inline; font-size: 12px; font-weight: 700;
   letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
 }
-details.panel > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-details.panel > summary h2 { flex: 1; }
 .count { flex: none; min-width: 24px; padding: 0 8px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); color: var(--ink-2); font-size: 12px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
-details.panel > summary::-webkit-details-marker { display: none; }
-details.panel > summary::after { content: "▾"; color: var(--muted); }
-details.panel:not([open]) > summary::after { content: "▸"; }
-details.panel[open] > summary { margin-bottom: 10px; }
 summary:focus-visible, button:focus-visible, input:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
@@ -168,7 +155,6 @@ summary:focus-visible, button:focus-visible, input:focus-visible {
 .band { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
 input[type="range"] { width: 100%; accent-color: var(--ink-2); margin: 0; }
 .hint { color: var(--muted); font-size: 12px; }
-label.inline { display: flex; align-items: center; gap: 8px; }
 /* Kritična područja: one button per area, a click zooms to it */
 .areas { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
 .areas:empty { display: none; }
@@ -198,39 +184,6 @@ label.inline { display: flex; align-items: center; gap: 8px; }
 .area-actions { display: inline-flex; gap: 6px; }
 .small-action { flex: none; padding: 3px 9px; font-size: 11.5px; font-weight: 600; border-radius: 7px; }
 
-/* Small switch: ignore red segments on Riječna granica (under Napredno) */
-.small-toggle {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px;
-  font: inherit; text-align: left; color: var(--ink); background: transparent;
-  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
-}
-.small-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.small-toggle:disabled { cursor: default; opacity: .6; }
-.small-toggle-switch { position: relative; flex: none; width: 30px; height: 17px; border-radius: 9px; background: var(--line); transition: background .15s; }
-.small-toggle-switch::after {
-  content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .35); transition: transform .15s;
-}
-.small-toggle[aria-pressed="true"] .small-toggle-switch { background: var(--river); }
-.small-toggle[aria-pressed="true"] .small-toggle-switch::after { transform: translateX(13px); }
-.small-toggle-text { display: grid; gap: 1px; }
-.small-toggle-text strong { font-size: 12.5px; font-weight: 600; }
-.small-toggle-text small { font-size: 11.5px; color: var(--ink-2); }
-
-/* Layers: one-click pills and quick views */
-.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.presets { display: inline-flex; gap: 4px; }
-.preset { flex: none; padding: 2px 8px; font-size: 12px; border-radius: 999px; }
-.preset[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip {
-  flex: none; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
-  color: var(--muted); background: transparent; border: 1px dashed var(--line); text-decoration: line-through;
-}
-.chip[aria-pressed="true"] { color: var(--ink); background: var(--raised); border: 1px solid var(--ink-2); text-decoration: none; }
-.chip:focus-visible, .preset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.corridor-status { margin: -4px 0 0; font-size: 12px; }
-.corridor-status:empty { display: none; }
 select {
   background: var(--raised); color: var(--ink);
   border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit;
@@ -284,10 +237,6 @@ button:hover { border-color: var(--ink-2); }
 .map-legend .legend-row .label small { display: none; } /* the explanation is the row's hover title */
 .map-legend .legend-icon { width: 22px; height: 22px; }
 main:has(#map.plain) .map-legend, main:has(#map.plain) .risk-key { display: none; }
-
-.notes { color: var(--muted); font-size: 11.5px; padding: 0 4px 4px; }
-.notes ul { padding-left: 16px; list-style: disc; }
-.notes li, .notes p { margin: 4px 0; }
 
 /* Map */
 main { position: absolute; inset: 0; }
