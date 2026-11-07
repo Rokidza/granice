@@ -49,4 +49,7 @@ export default {
   // Default range of the nearest-pair distance in metres: segments within it are grouped into
   // Kritična područja. The planner changes it in the sidebar.
   band: { minM: 500, maxM: 600 },
+  bandBottomM: 50, // the start of the sliders (m)
+  bandTopM: 1000, // the end of the sliders (m)
+  bandGapM: 50, // the least the range spans, so the two thumbs never sit on each other (m)
 };

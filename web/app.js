@@ -5,6 +5,7 @@ import CONFIG from "./config.js";
 import {
   BORDER_COLORS,
   DANGER,
+  IZRACUN,
   PINS,
   RIVER,
   ROAD_STYLES,
@@ -56,7 +57,7 @@ const CATEGORY_STYLE = {
   makadam: { width: 1.4, casing: 1, casingOpacity: 0.5, opacity: 0.75, dash: null },
   staza: { width: 1.1, casing: 0.8, casingOpacity: 0.4, opacity: 0.65, dash: [2.2, 1.6] },
 };
-const FIRST_DATA_LAYER = "staze-par"; // basemap layers go below this one
+const FIRST_DATA_LAYER = "staze-izracun"; // basemap layers go below this one
 const BASEMAP_STORAGE_KEY = "granice.podloga";
 const LEGEND_STORAGE_KEY = "granice.legenda";
 // Camera moves to a chosen place: a steady glide in and out of the zoom, not a fly-out-and-back jump.
@@ -284,6 +285,7 @@ function themedPaint(theme) {
     "granica-casing": { "line-color": border.casing },
     granica: { "line-color": border.line },
     "granica-kriticna": { "line-color": border.critical },
+    "staze-izracun": { "line-color": IZRACUN[theme] },
     "staze-par": { "line-color": DANGER[theme] },
     "staze-zona": { "line-color": DANGER[theme] },
     "parovi-tocke": { "circle-color": DANGER[theme], "circle-stroke-color": SURFACES[theme] },
@@ -308,6 +310,12 @@ function dataLayers(theme) {
   const staze = { source: "staze", ...(CONFIG.stazeTiles ? { "source-layer": "staze" } : {}) };
   const colors = themedPaint(theme);
   const layers = [
+    // A thin yellow edge under the parts of the roads that enter the calculation: only the pieces
+    // up to the corridor from the border (staze.geojson cuts each Staza into 50 m bands, pojas_m).
+    { id: "staze-izracun", type: "line", ...staze,
+      filter: ["<=", ["coalesce", ["get", "pojas_m"], 0], state.corridorM ?? 500],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colors["staze-izracun"], "line-width": roadScaled(4.4), "line-opacity": 0.9 } }, // just wider than a road with its outline (3.2)
     // The two Staze of the pair of the chosen Kritično područje, a soft red under the roads.
     { id: "staze-par", type: "line", ...staze, filter: NO_ID,
       layout: { "line-cap": "round", "line-join": "round" },
@@ -318,8 +326,8 @@ function dataLayers(theme) {
       minzoom: 11.5, layout: { "line-cap": "round", "line-join": "round" },
       paint: { ...colors["staze-zona"], "line-width": roadScaled(4.5),
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0, 13.5, 0.45] } },
-    // Grey over everything farther from the border than the corridor; the roads themselves are
-    // drawn above it in their own colours.
+    // Grey over everything farther from the border than the corridor: it mutes the yellow there,
+    // while the roads themselves are drawn above it in their own colours.
     { id: "pojas-magla", type: "fill", source: "magla",
       paint: { "fill-color": FOG_COLOR, "fill-opacity": FOG_OPACITY } },
     // Beyond it the grey fades out in rings up to 10 km from the border (magla_rub.geojson).
@@ -455,7 +463,7 @@ const LAYER_GROUPS = [
   { id: "promet", label: "Promet na prijelazima", hint: "Putnici godišnje po cestovnom prijelazu (DZS), klik daje pojedinosti",
     layers: PROMET_LAYERS },
   { id: "granica", label: "Granična linija", hint: "Granična linija", layers: ["granica-casing", "granica", "granica-kriticna"] },
-  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub"] },
+  { id: "magla", label: "Pojas cesta", hint: "Sivo je sve dalje od granice od pojasa u kojem putovi ulaze u izračun", layers: ["pojas-magla", "pojas-magla-rub", "staze-izracun"] },
   { id: "rijeka", label: "Rijeka", hint: "Granica na rijeci (plavo)", layers: ["rijecna-granica"] },
   { id: "cesta", label: "Ceste", hint: "Ceste", layers: ["staze-cesta-casing", "staze-cesta"] },
   { id: "makadam", label: "Makadami", hint: "Makadami i šumski putovi", layers: ["staze-makadam-casing", "staze-makadam"] },
@@ -874,7 +882,22 @@ function renderLegend() {
     ),
   );
   const note = element("p", `U izračun ulaze ceste, makadami i staze, i to samo njihovi dijelovi do ${corridorText()} od granice. Udaljenost para staza je najmanje zbroj njihovih udaljenosti od granice, pa prag iznad ${metres(2 * state.corridorM)} hvata samo parove razmaknute uzduž granice. Odabirom područja u izborniku vidi se par staza koji ga čini kritičnim i put pješice između njih.`, "legend-note");
-  legend.append(note);
+  legend.append(
+    note,
+    legendGroup(
+      null,
+      legendRow(
+        sample((svg) => {
+          const { fill, casing } = ROAD_STYLES[theme].cesta;
+          sampleLine(svg, IZRACUN[theme], 4.4, { opacity: 0.9 });
+          sampleLine(svg, casing, 3.2);
+          sampleLine(svg, fill, 2);
+        }),
+        "Ova cesta ulazi u izračun",
+        `Tanki žuti rub: dio puta do ${corridorText()} od granice.`,
+      ),
+    ),
+  );
 }
 
 /** The legend is a drop-down in the map's top-right corner: folded to its button at first, so it
@@ -907,24 +930,36 @@ const kilometres = (metres) =>
 const metres = (value) => `${number(0).format(value)} m`;
 const bandText = ({ minM = 0, maxM }) => (minM > 0 ? `od ${number(0).format(minM)} do ${metres(maxM)}` : `do ${metres(maxM)}`);
 
-/** Reads the range from its two sliders. Moving one past the other drags the other along. */
+/** Reads the range from its two sliders. They stay at least CONFIG.bandGapM apart: moving one
+ * against the other pushes the other along, and at the end of the track the moved one stops. */
 function readBand(moved) {
   const min = $("band-min");
   const max = $("band-max");
-  if (Number(min.value) > Number(max.value)) {
-    if (moved === min) max.value = min.value;
-    else min.value = max.value;
+  const gap = CONFIG.bandGapM;
+  if (Number(max.value) - Number(min.value) < gap) {
+    if (moved === min) {
+      max.value = String(Math.min(Number(min.value) + gap, Number(max.max)));
+      min.value = String(Number(max.value) - gap);
+    } else {
+      min.value = String(Math.max(Number(max.value) - gap, Number(min.min)));
+      max.value = String(Number(min.value) + gap);
+    }
   }
   paintBandFill();
   return { minM: Number(min.value), maxM: Number(max.value) };
 }
 
-/** The part of the track between the two thumbs is coloured. */
+/** The part of the track between the two thumbs is coloured. A thumb's centre runs from half a
+ * thumb in from one end of the track to half a thumb in from the other, so the fill does too. */
 function paintBandFill() {
-  const top = Number($("band-max").max) || 1;
-  $("band-fill").style.left = `${(Number($("band-min").value) / top) * 100}%`;
-  $("band-fill").style.right = `${100 - (Number($("band-max").value) / top) * 100}%`;
+  const bottom = Number($("band-min").min) || 0;
+  const span = (Number($("band-max").max) || 1) - bottom || 1;
+  const at = (input) => (Number(input.value) - bottom) / span;
+  const fill = $("band-fill").style;
+  fill.left = `calc(${BAND_THUMB / 2}px + (100% - ${BAND_THUMB}px) * ${at($("band-min"))})`;
+  fill.right = `calc(${BAND_THUMB / 2}px + (100% - ${BAND_THUMB}px) * ${1 - at($("band-max"))})`;
 }
+const BAND_THUMB = 16; // px, the width of a thumb in style.css
 
 /** Croatian plural of a count: 1 područje, 2 područja, 5 područja. */
 const plural = (n, one, few, many) =>
@@ -946,12 +981,14 @@ function loadCorridor(distanceM) {
   return state.corridorFiles.get(distanceM);
 }
 
-/** The sliders reach the farthest pair in the data, rounded up to 500 m. */
+/** The sliders run from CONFIG.bandBottomM to CONFIG.bandTopM: with roads only up to 500 m from
+ * the border, pairs farther apart than 1 km lie along the border and almost never make a
+ * Kritično područje. */
 function setBandLimits() {
-  const farthest = Math.max(0, ...state.segments.map((s) => s.properties.udaljenost_m ?? 0));
-  const top = String(Math.max(Math.ceil(farthest / 500) * 500, state.band.maxM));
-  $("band-min").max = top;
-  $("band-max").max = top;
+  for (const id of ["band-min", "band-max"]) {
+    $(id).min = String(CONFIG.bandBottomM);
+    $(id).max = String(CONFIG.bandTopM);
+  }
   paintBandFill();
 }
 
@@ -2127,8 +2164,9 @@ async function start() {
   } catch { /* data from before the corridor files: the plain grey fog */ }
 
   setBandLimits();
-  $("band-min").value = String(state.band.minM ?? 0);
+  $("band-min").value = String(state.band.minM ?? CONFIG.bandBottomM);
   $("band-max").value = String(state.band.maxM);
+  state.band = { ...state.band, ...readBand($("band-min")) }; // keeps the default within the sliders' range
 
   await mapLoaded;
   map.addImage("pin-kopno", imageData(pinCanvas(PINS.kopno)), { pixelRatio: 2 });
